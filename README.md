@@ -93,6 +93,8 @@ Android 内核构建使用固定版本的官方 `golang.org/x/mobile`；当前�
 
 版本 tag 可使用 `v1.2.3` 或 `v1.2.3-beta.1`，版本号同步为 Android 的 versionName。其他 tag 也会触发构建，APK 保留 pubspec 中的应用版本。发布新版本时递增 pubspec.yaml 中的构建号，以支持 Android 升级。新 Release 会在两个 APK 都上传成功后发布。形如 `v1.2.3-beta.1` 的 tag 会标记为预发布。重跑时复用相同 tag 的 Release，对已发布版本只补齐缺失或未成功上传的 APK。
 
+已推送的 tag 若因 CI 环境配置失败，可在修复合入默认分支后，打开 **Actions → Android tag APKs → Run workflow**，选择默认分支，在 `tag` 中填入原标签（例如 `v0.1.0`）。工作流使用当前的构建环境配置，检出指定 tag 的源码并发布到该 tag。直接在旧运行中选择 Re-run 会继续使用旧工作流。
+
 正式分发时，在仓库 **Settings → Secrets and variables → Actions** 配置以下四项 repository secrets，使不同 tag 和架构使用同一签名证书：
 
 | Secret | 内容 |

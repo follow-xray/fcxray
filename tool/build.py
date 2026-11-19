@@ -20,6 +20,12 @@ NATIVE = ROOT / 'native'
 
 
 def run(args, cwd=ROOT, env=None):
+    # CreateProcess does not resolve Flutter's batch entry point as an EXE.
+    if os.name == 'nt' and args[0] == 'flutter':
+        launcher = shutil.which('flutter.bat')
+        if not launcher:
+            sys.exit('flutter.bat not found on PATH')
+        args = [launcher, *args[1:]]
     print('+', ' '.join(str(a) for a in args), flush=True)
     subprocess.run([str(a) for a in args], cwd=cwd, env=env, check=True)
 

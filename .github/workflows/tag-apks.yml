@@ -2,39 +2,51 @@ name: Android tag APKs
 on:
   push:
     tags: ['**']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to build and publish (for example v0.1.0)
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   apk:
-    if: github.event.deleted == false
+    if: github.event_name == 'workflow_dispatch' || github.event.deleted == false
     name: Build ${{ matrix.abi }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
         abi: [arm64-v8a, armeabi-v7a]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.sha }}
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.27.1'
           cache-dependency-path: native/go.sum
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.0'
           channel: stable
           cache: true
-      - uses: android-actions/setup-android@v3
-      - name: Install Android toolchain
+      - name: Install pinned SDK packages with the runner's sdkmanager
         run: |
-          sdkmanager 'ndk;28.2.13676358' 'platforms;android-36' 'build-tools;36.0.0'
-          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+          sdk="${ANDROID_HOME:?Missing Android SDK on the runner}"
+          manager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          ndk=28.2.13676358
+          "$manager" --sdk_root="$sdk" "ndk;$ndk" 'platforms;android-36' 'build-tools;36.0.0'
+          test -x "$sdk/ndk/$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          test -x "$sdk/build-tools/36.0.0/aapt2"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/$ndk" >> "${GITHUB_ENV:?}"
       - run: flutter pub get
       - name: Prepare signing key
         shell: bash
@@ -57,11 +69,12 @@ jobs:
         id: build
         env:
           ABI: ${{ matrix.abi }}
+          TAG: ${{ inputs.tag || github.ref_name }}
           FCXRAY_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           FCXRAY_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           FCXRAY_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: python3 tool/build.py tag-apk --tag="$GITHUB_REF_NAME" --abi="$ABI"
-      - uses: actions/upload-artifact@v4
+        run: python3 tool/build.py tag-apk --tag="$TAG" --abi="$ABI"
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ steps.build.outputs.artifact }}
           path: ${{ steps.build.outputs.apk }}
@@ -79,10 +92,10 @@ jobs:
     permissions:
       contents: write
     concurrency:
-      group: android-release-${{ github.ref }}
+      group: android-release-${{ inputs.tag || github.ref_name }}
       cancel-in-progress: false
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: fcxray-*-android-*
           path: release-apks
@@ -92,7 +105,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
+          TAG: ${{ inputs.tag || github.ref_name }}
         run: |
           set -euo pipefail
           shopt -s nullglob

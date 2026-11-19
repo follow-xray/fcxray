@@ -9,8 +9,8 @@ jobs:
   checks:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.27.1'
           cache-dependency-path: native/go.sum
@@ -35,8 +35,8 @@ jobs:
             artifact: build/windows/x64/runner/Release/
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.27.1'
           cache-dependency-path: native/go.sum
@@ -47,35 +47,40 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: python tool/build.py ${{ matrix.target }}
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: fcxray-${{ matrix.target }}-development
           path: ${{ matrix.artifact }}
   android:
     if: github.ref_type != 'tag'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: '1.27.1'
           cache-dependency-path: native/go.sum
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.0'
           channel: stable
           cache: true
-      - uses: android-actions/setup-android@v3
-      - run: sdkmanager 'ndk;28.2.13676358' 'platforms;android-36' 'build-tools;36.0.0'
+      - name: Install pinned SDK packages with the runner's sdkmanager
+        run: |
+          sdk="${ANDROID_HOME:?Missing Android SDK on the runner}"
+          manager="$sdk/cmdline-tools/latest/bin/sdkmanager"
+          ndk=28.2.13676358
+          "$manager" --sdk_root="$sdk" "ndk;$ndk" 'platforms;android-36' 'build-tools;36.0.0'
+          test -x "$sdk/ndk/$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          test -x "$sdk/build-tools/36.0.0/aapt2"
+          echo "ANDROID_NDK_HOME=$sdk/ndk/$ndk" >> "${GITHUB_ENV:?}"
       - run: flutter pub get
       - run: python3 tool/build.py apk
-        env:
-          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/28.2.13676358
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: fcxray-android-debug
           path: build/app/outputs/flutter-apk/fcxray-debug.apk
