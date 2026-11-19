@@ -1,4 +1,5 @@
 import 'calm_theme.dart';
+import 'config_recovery.dart';
 import 'format_bytes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -72,6 +73,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     listenable: c,
     builder: (context, _) => LayoutBuilder(
       builder: (context, constraints) {
+        if (!c.loaded) return StartupPanel(c);
         final wide = constraints.maxWidth >= 820;
         final scaffold = Scaffold(
           body: SafeArea(
@@ -96,6 +98,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                 width: 34,
                                 height: 34,
                                 semanticLabel: 'fcxray',
+                                errorBuilder: (_, _, _) =>
+                                    const Icon(Icons.shield_outlined),
                               ),
                               const SizedBox(width: 12),
                             ],
@@ -213,6 +217,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   width: 44,
                   height: 44,
                   semanticLabel: 'fcxray',
+                  errorBuilder: (_, _, _) => const Icon(Icons.shield_outlined),
                 ),
                 const SizedBox(width: 10),
                 const Expanded(
@@ -251,41 +256,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ],
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.all(22),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Xray-core ${c.coreVersion}',
-                  style: TextStyle(fontSize: 12, color: Calm.of(context).muted),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  'MPL-2.0 · 社区开源',
-                  style: TextStyle(fontSize: 11, color: Calm.of(context).muted),
-                ),
-              ],
-            ),
-          ),
         ],
       ),
-    ),
-  );
-
-  Widget _pill(String label, IconData icon) => Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    decoration: BoxDecoration(
-      border: Border.all(color: Calm.of(context).line),
-      borderRadius: BorderRadius.circular(30),
-    ),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: Theme.of(context).colorScheme.primary),
-        const SizedBox(width: 7),
-        Text(label, style: const TextStyle(fontSize: 11, letterSpacing: 1)),
-      ],
     ),
   );
 
@@ -304,7 +276,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         ),
         const SizedBox(height: 16),
       ],
-      ConnectionPanel(c, onImport: _import),
+      ConnectionPanel(c, onImport: _import, onManageNodes: () => _goTo(1)),
+      if (c.profiles.isEmpty && c.subscriptions.isEmpty)
+        Padding(
+          padding: const EdgeInsets.only(top: 12),
+          child: BackupActions(c, allowExport: false),
+        ),
       if (c.error != null)
         Padding(padding: const EdgeInsets.only(top: 16), child: _errorCard()),
       const SizedBox(height: 20),
@@ -348,107 +325,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 compact,
                 Calm.of(context).peach,
                 Calm.of(context).clay,
-              ),
-            ],
-          );
-        },
-      ),
-      const SizedBox(height: 24),
-      Row(
-        children: [
-          const Expanded(
-            child: Text(
-              '当前节点',
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
-            ),
-          ),
-          TextButton(onPressed: () => _goTo(1), child: const Text('管理节点 →')),
-        ],
-      ),
-      const SizedBox(height: 6),
-      SoftSurface(
-        child: Row(
-          children: [
-            const TintIcon(Icons.hub_outlined),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    c.displayProfile?.name ??
-                        (c.routing == RoutingMode.direct ? '系统直连' : '还没有节点'),
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w600,
-                      fontSize: 17,
-                    ),
-                  ),
-                  const SizedBox(height: 5),
-                  Text(
-                    c.displayProfile?.endpointLabel ??
-                        (c.routing == RoutingMode.direct
-                            ? '使用系统网络出口'
-                            : '手动添加、导入链接或使用内置示例'),
-                    style: TextStyle(
-                      color: Calm.of(context).muted,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            if (c.displayProfile != null)
-              _pill(c.displayProfile!.protocol.toUpperCase(), Icons.bolt),
-          ],
-        ),
-      ),
-      const SizedBox(height: 20),
-      LayoutBuilder(
-        builder: (context, box) {
-          final narrow = box.maxWidth < 485;
-          final width = narrow ? box.maxWidth : (box.maxWidth - 14) / 2;
-          Widget destination(
-            String title,
-            String summary,
-            IconData icon,
-            Color tint,
-            Color ink,
-            int target,
-          ) => SizedBox(
-            width: width,
-            child: Card(
-              child: ListTile(
-                contentPadding: const EdgeInsets.symmetric(
-                  vertical: 8,
-                  horizontal: 16,
-                ),
-                leading: TintIcon(icon, fill: tint, ink: ink),
-                title: Text(title),
-                subtitle: Text(summary),
-                trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => _goTo(target),
-              ),
-            ),
-          );
-          return Wrap(
-            spacing: 14,
-            runSpacing: 12,
-            children: [
-              destination(
-                '订阅来源',
-                '${c.subscriptions.length} 个订阅',
-                Icons.rss_feed_rounded,
-                Calm.of(context).peach,
-                Calm.of(context).clay,
-                2,
-              ),
-              destination(
-                '分流配置',
-                '${c.overrides.where((r) => r.enabled).length} 条自定义规则已启用',
-                Icons.alt_route_rounded,
-                Calm.of(context).mint,
-                Calm.of(context).pine,
-                4,
               ),
             ],
           );
@@ -501,34 +377,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            '需要处理',
-            style: TextStyle(
-              color: Calm.of(context).clay,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
           SelectableText(
             c.error!,
             style: TextStyle(fontSize: 12, color: Calm.of(context).muted),
           ),
-          if (!c.loaded)
-            TextButton.icon(
-              onPressed: c.initializing ? null : () => c.initialize(),
-              icon: const Icon(Icons.refresh),
-              label: const Text('重新读取配置'),
-            ),
-          if (c.loaded &&
-              c.platform != 'android' &&
-              c.mode == ConnectionMode.vpn)
-            Padding(
-              padding: EdgeInsets.only(top: 8),
-              child: Text(
-                'TUN 需要管理员权限（macOS 会请求授权，Windows 请以管理员运行）。也可切换到本地代理模式。',
-                style: TextStyle(fontSize: 12, color: Calm.of(context).muted),
-              ),
-            ),
         ],
       ),
     ),
@@ -573,6 +425,20 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       const SizedBox(height: 18),
       SubscriptionAgentSetting(c),
       const SizedBox(height: 18),
+      SoftSurface(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '备份与恢复',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 12),
+            BackupActions(c),
+          ],
+        ),
+      ),
+      const SizedBox(height: 18),
       if (c.error != null) _errorCard(),
       if (!c.editable)
         const Padding(
@@ -585,11 +451,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '连接模式',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 16),
               DropdownButtonFormField<ConnectionMode>(
                 initialValue: c.mode,
                 isExpanded: true,
@@ -610,29 +471,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ],
                 onChanged: c.editable ? (v) => c.settings(v!, c.routing) : null,
               ),
-              const SizedBox(height: 14),
-              Text(
-                c.platform == 'android'
-                    ? '使用 Android 系统 VPN 授权，无需 root。'
-                    : 'macOS TUN 会请求管理员授权；Windows TUN 请以管理员运行。本地代理监听 127.0.0.1:10808（SOCKS5）和 :10809（HTTP），需要在浏览器或其他应用中手动设置。',
-                style: TextStyle(color: Calm.of(context).muted, fontSize: 13),
-              ),
-
-              const SizedBox(height: 14),
-              Text(
-                'DNS 使用 Cloudflare DoH；TUN 内的 53 端口请求交由内核解析。GeoIP / GeoSite 分流请在规则页配置。',
-                style: TextStyle(color: Calm.of(context).muted, fontSize: 13),
-              ),
-              if (c.platform == 'macos')
-                Padding(
-                  padding: EdgeInsets.only(top: 12),
-                  child: Text(
-                    'macOS 保留原有系统 DNS。局域网 DNS 可能经本地路由直连。',
-                    style: TextStyle(
-                      color: Calm.of(context).clay,
-                      fontSize: 13,
-                    ),
-                  ),
+              if (c.mode == ConnectionMode.proxy)
+                const SelectableText(
+                  'SOCKS5  127.0.0.1:10808\nHTTP  127.0.0.1:10809',
                 ),
             ],
           ),
@@ -663,18 +504,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ],
               ),
               const SizedBox(height: 18),
-              const Text(
-                '关于 fcxray',
-                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 12),
-              Text('客户端 0.7.1 · Xray-core ${c.coreVersion}'),
-              const SizedBox(height: 8),
-              Text(
-                '开源协议 MPL-2.0。所有流量由你提供的服务器转发；应用不提供节点服务。',
-                style: TextStyle(color: Calm.of(context).muted),
-              ),
-              const SizedBox(height: 10),
+              Text('fcxray 0.7.1 · Xray-core ${c.coreVersion}'),
               TextButton(
                 onPressed: () => showLicensePage(
                   context: context,

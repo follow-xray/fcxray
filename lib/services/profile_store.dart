@@ -10,18 +10,27 @@ abstract class ProfileStore {
 }
 
 class SecureProfileStore implements ProfileStore {
-  final _storage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(resetOnError: false),
+  SecureProfileStore({this.backup = false});
+  final bool backup;
+  late final _storage = FlutterSecureStorage(
+    aOptions: AndroidOptions(
+      resetOnError: false,
+      storageNamespace: backup ? 'fcxray-backup' : null,
+    ),
     mOptions: MacOsOptions(usesDataProtectionKeychain: false),
   );
-  static const _key = 'fcxray.state.v1';
+  String get _key => backup ? 'fcxray.backup.v1' : 'fcxray.state.v1';
   bool _legacyCleanupDone = false;
 
   @override
   Future<Map<String, dynamic>?> read() async {
     String? raw;
-    if (Platform.isWindows) raw = await (await WindowsStateFile.open()).read();
-    raw ??= await _storage.read(key: _key);
+    if (Platform.isWindows) {
+      raw = await (await WindowsStateFile.open(backup: backup)).read();
+      if (!backup && raw == null) raw = await WindowsStateFile.readLegacy(_key);
+    } else {
+      raw = await _storage.read(key: _key);
+    }
     return raw == null ? null : jsonDecode(raw) as Map<String, dynamic>;
   }
 
@@ -33,12 +42,12 @@ class SecureProfileStore implements ProfileStore {
       if (Platform.isAndroid) {
         await const MethodChannel(
           'com.fcxray.client/preferences',
-        ).invokeMethod<void>('flush');
+        ).invokeMethod<void>('flush', backup);
       }
       return;
     }
-    await (await WindowsStateFile.open()).write(raw);
-    if (!_legacyCleanupDone) {
+    await (await WindowsStateFile.open(backup: backup)).write(raw);
+    if (!backup && !_legacyCleanupDone) {
       try {
         await _storage.delete(key: _key);
         _legacyCleanupDone = true;

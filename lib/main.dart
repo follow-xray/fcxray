@@ -22,8 +22,41 @@ void main() {
     }
   });
   final controller = createController();
+  if (kReleaseMode) {
+    // This fallback must paint even when Material ancestors or image assets
+    // are unavailable. Keep diagnostics in Flutter's normal error reporter.
+    ErrorWidget.builder = (_) => Directionality(
+      textDirection: TextDirection.ltr,
+      child: ColoredBox(
+        color: const Color(0xff302f42),
+        child: Center(
+          child: GestureDetector(
+            onTap: controller.openRecovery,
+            child: const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text(
+                '界面加载失败 · 打开恢复页',
+                style: TextStyle(color: Colors.white, fontSize: 16),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
   runApp(FcxrayApp(controller: controller));
-  unawaited(controller.initialize());
+  WidgetsBinding.instance.addPostFrameCallback(
+    (_) => unawaited(controller.initialize()),
+  );
+  if (Platform.isMacOS) {
+    unawaited(
+      WidgetsBinding.instance.waitUntilFirstFrameRasterized.then(
+        (_) => const MethodChannel(
+          'com.fcxray.client/window',
+        ).invokeMethod<void>('firstFrame'),
+      ),
+    );
+  }
   if (Platform.isMacOS || Platform.isWindows) {
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       try {

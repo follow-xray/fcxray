@@ -68,11 +68,6 @@ class GeoPanel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 18),
-        Text(
-          '导入 Xray / V2Ray 格式的 .dat，或从 HTTPS 来源下载。连接时优先经当前代理下载，失败重试系统网络。校验成功后为下次连接保存新版本；当前连接仍使用旧文件，失败保留旧版本。',
-          style: TextStyle(color: Calm.of(context).muted, fontSize: 13),
-        ),
-        const SizedBox(height: 18),
         for (final asset in c.geoAssets.values)
           Padding(
             padding: const EdgeInsets.only(bottom: 16),
@@ -260,7 +255,7 @@ class GeoPanel extends StatelessWidget {
                     help:
                         '应用运行时执行，VPN 连接中优先通过当前代理下载；不重启连接，新库下次连接生效。固定摘要需随目标版本调整。',
                     value: hours,
-                    items: updateIntervals(),
+                    items: updateIntervals(hours),
                     onChanged: busy ? null : (v) => setState(() => hours = v!),
                   ),
                   if (error != null)

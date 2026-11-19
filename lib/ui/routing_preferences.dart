@@ -40,7 +40,6 @@ class RoutingPreferences extends StatelessWidget {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('绕过局域网'),
-          subtitle: const Text('在规则模式下，将私网地址直连。'),
           value: c.bypassLan,
           onChanged: c.resourcesEditable
               ? (v) => _option(context, lan: v)
@@ -49,7 +48,6 @@ class RoutingPreferences extends StatelessWidget {
         SwitchListTile(
           contentPadding: EdgeInsets.zero,
           title: const Text('GeoIP / GeoSite 分流'),
-          subtitle: const Text('在“路由与规则”管理规则库和分类。'),
           value: c.useGeo,
           onChanged: c.resourcesEditable
               ? (v) => _option(context, geo: v)

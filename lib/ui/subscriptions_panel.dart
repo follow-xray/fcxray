@@ -7,12 +7,15 @@ import 'help_fields.dart';
 
 String dateLabel(DateTime? value) =>
     value == null ? '从未更新' : value.toLocal().toString().substring(0, 19);
-List<DropdownMenuItem<int>> updateIntervals() => [0, 6, 12, 24, 72, 168]
-    .map(
-      (h) =>
-          DropdownMenuItem(value: h, child: Text(h == 0 ? '仅手动更新' : '每 $h 小时')),
-    )
-    .toList();
+List<DropdownMenuItem<int>> updateIntervals(int selected) =>
+    ({0, 6, 12, 24, 72, 168, selected}.toList()..sort())
+        .map(
+          (h) => DropdownMenuItem(
+            value: h,
+            child: Text(h == 0 ? '仅手动更新' : '每 $h 小时'),
+          ),
+        )
+        .toList();
 void showOperationError(BuildContext context, Object error) {
   ScaffoldMessenger.of(context).showSnackBar(
     SnackBar(
@@ -61,11 +64,6 @@ class SubscriptionsPanel extends StatelessWidget {
                     label: const Text('更新全部'),
                   ),
                 ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                '支持多个 HTTPS 订阅；分享链接列表、Base64 内容、Xray 出站 JSON 均可。VPN 连接时也可更新，优先通过当前代理下载，失败重试系统网络。新节点下次连接生效，关闭应用后不执行定时更新。',
-                style: TextStyle(color: Calm.of(context).muted, fontSize: 13),
               ),
             ],
           ),
@@ -235,7 +233,7 @@ class SubscriptionsPanel extends StatelessWidget {
                     label: '自动更新周期',
                     help: '应用运行时每分钟检查，连接中也可下载；当前连接不会重启，更新下次连接生效。失败后按周期重试。',
                     value: hours,
-                    items: updateIntervals(),
+                    items: updateIntervals(hours),
                     onChanged: busy ? null : (v) => setState(() => hours = v!),
                   ),
                   if (error != null)

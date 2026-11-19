@@ -1,19 +1,9 @@
 import 'dart:convert';
-import 'dart:io';
-import 'dart:typed_data';
-import 'package:file_selector/file_selector.dart';
-import 'package:flutter/services.dart';
+import 'json_document.dart';
 import '../models/route_override.dart';
 
 class RuleExchange {
   static const _format = 'fcxray.route-overrides';
-  static const _type = XTypeGroup(
-    label: 'JSON',
-    extensions: ['json'],
-    mimeTypes: ['application/json', 'text/plain'],
-    uniformTypeIdentifiers: ['public.json'],
-  );
-  static const _limit = 1024 * 1024;
   static String encode(List<RouteOverride> rules) =>
       const JsonEncoder.withIndent('  ').convert({
         'format': _format,
@@ -57,40 +47,12 @@ class RuleExchange {
   }
 
   static Future<List<RouteOverride>?> pick() async {
-    final file = await openFile(acceptedTypeGroups: [_type]);
-    if (file == null) return null;
-    if (await file.length() > _limit) {
-      throw const FormatException('规则文件不能超过 1 MiB');
-    }
-    final bytes = BytesBuilder(copy: false);
-    await for (final chunk in file.openRead()) {
-      if (bytes.length + chunk.length > _limit) {
-        throw const FormatException('规则文件不能超过 1 MiB');
-      }
-      bytes.add(chunk);
-    }
-    return decode(utf8.decode(bytes.takeBytes()));
+    final bytes = await JsonDocument.rules.pick();
+    return bytes == null ? null : decode(utf8.decode(bytes));
   }
 
   static Future<bool> save(List<RouteOverride> rules) async {
     final bytes = utf8.encode(encode(rules));
-    if (bytes.length > _limit) throw const FormatException('规则文件不能超过 1 MiB');
-    if (Platform.isAndroid) {
-      return await const MethodChannel(
-            'com.fcxray.client/documents',
-          ).invokeMethod<bool>('saveRules', bytes) ??
-          false;
-    }
-    final location = await getSaveLocation(
-      suggestedName: 'fcxray-rules.json',
-      acceptedTypeGroups: [_type],
-    );
-    if (location == null) return false;
-    await XFile.fromData(
-      bytes,
-      mimeType: 'application/json',
-      name: 'fcxray-rules.json',
-    ).saveTo(location.path);
-    return true;
+    return JsonDocument.rules.save(bytes);
   }
 }

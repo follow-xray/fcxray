@@ -40,9 +40,24 @@ class WindowsStateFile {
   WindowsStateFile(this.file);
   final File file;
 
-  static Future<WindowsStateFile> open() async => WindowsStateFile(
-    File('${(await getApplicationSupportDirectory()).path}/fcxray-state.dpapi'),
+  static Future<WindowsStateFile> open({
+    bool backup = false,
+  }) async => WindowsStateFile(
+    File(
+      '${(await getApplicationSupportDirectory()).path}/fcxray-${backup ? 'backup' : 'state'}.dpapi',
+    ),
   );
+
+  // Version 4 of flutter_secure_storage_windows stored a DPAPI-protected JSON
+  // map here. Its normal read path deletes unreadable blobs; recovery must
+  // leave the original in place until the user chooses what to save.
+  static Future<String?> readLegacy(String key) async {
+    final dir = await getApplicationSupportDirectory();
+    final raw = await WindowsStateFile(
+      File('${dir.path}/flutter_secure_storage.dat'),
+    ).read();
+    return raw == null ? null : (jsonDecode(raw) as Map)[key] as String?;
+  }
 
   Future<String?> read() async {
     return Isolate.run(() {

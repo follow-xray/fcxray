@@ -32,7 +32,8 @@ class MainActivity : FlutterActivity() {
                     // flutter_secure_storage 11 uses apply() for these default
                     // stores. A commit on the same preferences waits for pending
                     // writes, including first-use key material, off the UI thread.
-                    val stores = listOf("FlutterSecureKeyStorage",
+                    val stores = if (call.arguments == true) listOf("FlutterSecureKeyStorage:fcxray-backup",
+                        "FlutterSecureStorageConfiguration:fcxray-backup", "fcxray-backup") else listOf("FlutterSecureKeyStorage",
                         "FlutterSecureStorageConfiguration:FlutterSecureStorage", "FlutterSecureStorage")
                     try {
                         val saved = stores.all {
@@ -46,14 +47,16 @@ class MainActivity : FlutterActivity() {
             }
         MethodChannel(engine.dartExecutor.binaryMessenger, "com.fcxray.client/documents")
             .setMethodCallHandler { call, result ->
-                if (call.method != "saveRules") {
+                val backup = call.method == "saveBackup"
+                if (!backup && call.method != "saveRules") {
                     result.notImplemented()
                 } else if (exportReply != null) {
                     result.error("BUSY", "A save dialog is open", null)
                 } else {
                     val bytes = call.arguments as? ByteArray
-                    if (bytes == null || bytes.size > 1024 * 1024) {
-                        result.error("SIZE", "Invalid rule file", null)
+                    val limit = if (backup) 32 * 1024 * 1024 else 1024 * 1024
+                    if (bytes == null || bytes.size > limit) {
+                        result.error("SIZE", "Invalid JSON document", null)
                     } else {
                         exportReply = result
                         exportBytes = bytes
@@ -61,7 +64,7 @@ class MainActivity : FlutterActivity() {
                             startActivityForResult(Intent(Intent.ACTION_CREATE_DOCUMENT).apply {
                                 addCategory(Intent.CATEGORY_OPENABLE)
                                 type = "application/json"
-                                putExtra(Intent.EXTRA_TITLE, "fcxray-rules.json")
+                                putExtra(Intent.EXTRA_TITLE, if (backup) "fcxray-backup.json" else "fcxray-rules.json")
                             }, 1002)
                         } catch (e: Exception) {
                             exportReply = null; exportBytes = null

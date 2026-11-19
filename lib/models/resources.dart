@@ -173,7 +173,7 @@ class GeoAsset {
     hash: j['hash'] as String? ?? '',
     size: j['size'] as int? ?? 0,
     entries: j['entries'] as int? ?? 0,
-    tags: (j['tags'] as List? ?? []).cast<String>(),
+    tags: (j['tags'] as List? ?? []).cast<String>().toList(),
     updatedAt: DateTime.tryParse(j['updatedAt'] as String? ?? ''),
     attemptedAt: DateTime.tryParse(j['attemptedAt'] as String? ?? ''),
     error: j['error'] as String?,
@@ -205,9 +205,9 @@ class GeoRouting {
     'blockSites': blockSites,
   };
   factory GeoRouting.fromJson(Map<String, dynamic> j) => GeoRouting(
-    directIPs: (j['directIPs'] as List? ?? ['cn']).cast<String>(),
-    directSites: (j['directSites'] as List? ?? ['cn']).cast<String>(),
-    blockSites: (j['blockSites'] as List? ?? []).cast<String>(),
+    directIPs: (j['directIPs'] as List? ?? ['cn']).cast<String>().toList(),
+    directSites: (j['directSites'] as List? ?? ['cn']).cast<String>().toList(),
+    blockSites: (j['blockSites'] as List? ?? []).cast<String>().toList(),
   );
   static List<String> parseTags(String value) {
     final tags = value

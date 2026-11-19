@@ -12,6 +12,8 @@ import '../services/core_backend.dart';
 import '../services/geo_store.dart';
 import '../services/profile_importer.dart';
 import '../services/profile_store.dart';
+import '../services/config_backup.dart';
+import '../services/protocol_catalog.dart';
 import '../services/node_latency.dart';
 import '../services/resource_fetcher.dart';
 
@@ -21,6 +23,7 @@ class AppController extends ChangeNotifier {
   AppController({
     required this.backend,
     required this.store,
+    this.backupStore,
     required this.platform,
     this.fetcher = const ResourceFetcher(),
     GeoStore? geoStore,
@@ -32,6 +35,13 @@ class AppController extends ChangeNotifier {
   }
   final CoreBackend backend;
   final ProfileStore store;
+  final ProfileStore? backupStore;
+  ConfigBackup? localBackup;
+  String? backupError;
+  Map<String, dynamic>? _lastSaved;
+  bool _pollAfterLoad = true;
+  Future<void> _backupQueue = Future.value();
+  static const _readTimeout = Duration(seconds: 10);
   final String platform;
   final ResourceFetcher fetcher;
   late final GeoStore geo;
@@ -167,6 +177,14 @@ class AppController extends ChangeNotifier {
   }
 
   void _restore(Map<String, dynamic> value, {List<Profile>? retainedProfiles}) {
+    final schema = value['schemaVersion'];
+    if (schema != null && (schema is! int || schema < 1 || schema > 3)) {
+      throw const FormatException('配置版本不受支持');
+    }
+    if (schema == 3 &&
+        (value['profiles'] is! List || value['subscriptions'] is! List)) {
+      throw const FormatException('配置缺少节点或订阅列表');
+    }
     final custom = value['customSubscriptionAgent'];
     customSubscriptionAgent =
         custom is String && SubscriptionAgent.validCustom(custom)
@@ -192,9 +210,21 @@ class AppController extends ChangeNotifier {
         (value['profiles'] as List? ?? [])
             .map((p) => Profile.fromJson(Map<String, dynamic>.from(p as Map)))
             .toList();
+    if (retainedProfiles == null) {
+      for (final profile in profiles) {
+        ProtocolCatalog.validate(profile.outbound);
+        ProtocolCatalog.endpoint(
+          profile.outbound,
+        ); // Validate fields rendered by the node list.
+      }
+    }
     subscriptions = (value['subscriptions'] as List? ?? [])
         .map((s) => Subscription.fromJson(Map<String, dynamic>.from(s as Map)))
         .toList();
+    if (profiles.map((p) => p.id).toSet().length != profiles.length ||
+        subscriptions.map((s) => s.id).toSet().length != subscriptions.length) {
+      throw const FormatException('配置包含重复 ID');
+    }
     final assets = value['geoAssets'] as Map? ?? {};
     geoAssets = {
       for (final kind in ['geoip', 'geosite'])
@@ -202,6 +232,18 @@ class AppController extends ChangeNotifier {
             ? GeoAsset.defaults(kind)
             : GeoAsset.fromJson(Map<String, dynamic>.from(assets[kind] as Map)),
     };
+    for (final entry in geoAssets.entries) {
+      final asset = entry.value;
+      if (asset.kind != entry.key ||
+          asset.autoHours < 0 ||
+          (asset.fileName != null &&
+              GeoStore.fileDigest(entry.key, asset.fileName!) == null)) {
+        throw const FormatException('规则库配置无效');
+      }
+    }
+    if (subscriptions.any((s) => s.autoHours < 0)) {
+      throw const FormatException('更新周期无效');
+    }
     geoRouting = GeoRouting.fromJson(
       Map<String, dynamic>.from(value['geoRouting'] as Map? ?? {}),
     );
@@ -240,39 +282,180 @@ class AppController extends ChangeNotifier {
   };
 
   bool initializing = false;
+
+  Future<void> _readBackup() async {
+    if (backupStore == null) return;
+    final raw = await backupStore!.read().timeout(_readTimeout);
+    localBackup = raw == null ? null : ConfigBackup.fromJson(raw);
+    backupError = null;
+  }
+
+  Future<void> _saveBackup(Map<String, dynamic> state, {bool seed = false}) {
+    final destination = backupStore;
+    if (destination == null) return Future.value();
+    return _backupQueue = _backupQueue.then((_) async {
+      try {
+        if (seed) {
+          try {
+            await _readBackup();
+          } on FormatException {
+            // A verified primary can repair a damaged automatic backup.
+          }
+          if (localBackup != null) return;
+        }
+        final snapshot = ConfigBackup(DateTime.now(), state);
+        await destination.write(snapshot.toJson());
+        localBackup = snapshot;
+        backupError = null;
+      } on Object {
+        backupError = '自动备份不可用';
+      } finally {
+        _notify();
+      }
+    });
+  }
+
+  Future<void> _persist() async {
+    final next = _state();
+    final previous = _lastSaved;
+    if (backupStore != null &&
+        previous != null &&
+        jsonEncode(previous) != jsonEncode(next)) {
+      await _saveBackup(previous);
+    }
+    await store.write(next);
+    _lastSaved = next;
+    if (previous == null) await _saveBackup(next, seed: true);
+  }
+
   Future<void> initialize({bool poll = true}) async {
-    if (initializing || loaded || _disposed) return;
+    if (initializing || saving || loaded || _disposed) return;
     initializing = true;
+    _pollAfterLoad = poll;
     final previous = _state();
     error = null;
     _notify();
     try {
-      final value = await store.read();
+      final value = await store.read().timeout(_readTimeout);
       if (_disposed) return;
-      if (value != null) _restore(value);
+      if (value == null) {
+        try {
+          await _readBackup();
+        } on Object {
+          error = '找不到配置文件。';
+          backupError = '自动备份无法读取，请从文件恢复。';
+          return;
+        }
+        if (localBackup != null) {
+          error = '找不到配置文件，可以恢复之前的备份。';
+          return;
+        }
+      } else {
+        _restore(value);
+        _lastSaved = _state();
+        unawaited(_saveBackup(_lastSaved!, seed: true));
+      }
       loaded = true;
       _log('配置已加载');
     } on Object catch (e) {
       if (_disposed) return;
       _restore(previous);
       error = e is FormatException || e is TypeError || e is ArgumentError
-          ? '已保存的配置格式无效，原数据已保留。'
-          : '无法读取安全存储，请检查系统钥匙串或存储权限后重试。';
+          ? '配置格式无效，可以尝试恢复备份。'
+          : '配置读取失败，请重试或恢复备份。';
       _log(error!);
+      _notify();
+      try {
+        await _readBackup();
+      } on Object {
+        backupError = '自动备份不可用';
+      }
     } finally {
       initializing = false;
+      _notify();
     }
-    if (poll && loaded) {
-      await refresh();
-      if (_disposed || _exiting) return;
-      _scheduleStatusPoll();
-      _maintenance = Timer.periodic(
-        const Duration(minutes: 1),
-        (_) => unawaited(updateDue()),
-      );
-      unawaited(updateDue());
-    }
+    if (loaded && poll) await _monitor();
+  }
+
+  Future<void> openRecovery() async {
+    if (_disposed || initializing || saving || busy) return;
+    _timer?.cancel();
+    _maintenance?.cancel();
+    _timer = null;
+    _maintenance = null;
+    loaded = false;
+    _restore({});
+    _lastSaved = null;
+    error = '界面加载失败，可以尝试恢复备份。';
+    initializing = true;
     _notify();
+    try {
+      await _readBackup();
+    } on Object {
+      backupError = '自动备份不可用';
+    } finally {
+      initializing = false;
+      _notify();
+    }
+  }
+
+  Future<void> _monitor() async {
+    await refresh();
+    if (!loaded || _disposed || _exiting) return;
+    _scheduleStatusPoll();
+    _maintenance?.cancel();
+    _maintenance = Timer.periodic(
+      const Duration(minutes: 1),
+      (_) => unawaited(updateDue()),
+    );
+    unawaited(updateDue());
+  }
+
+  ConfigBackup exportBackup() {
+    if (!resourcesEditable) throw StateError('请等待当前操作完成');
+    return ConfigBackup(DateTime.now(), _state());
+  }
+
+  // null is an explicitly confirmed empty start on the recovery screen.
+  Future<void> restoreBackup(ConfigBackup? backup) async {
+    if (saving ||
+        initializing ||
+        busy ||
+        _disposed ||
+        (backup == null && loaded)) {
+      throw StateError('当前无法恢复配置');
+    }
+    final wasLoaded = loaded;
+    final hadSavedState = _lastSaved != null;
+    final before = _state();
+    final originalProfiles = profiles;
+    saving = true;
+    _notify();
+    try {
+      // Validate before touching storage or exposing imported models to a frame.
+      late final Map<String, dynamic> next;
+      try {
+        _restore(backup?.state ?? {});
+        next = _state();
+      } finally {
+        _restore(before, retainedProfiles: originalProfiles);
+      }
+      if (backup != null) await store.write(next);
+      if (_disposed) return;
+      _restore(next);
+      _lastSaved = backup == null ? null : next;
+      loaded = true;
+      error = null;
+      if (wasLoaded && hadSavedState) {
+        await _saveBackup(before);
+      } else if (backup != null && localBackup == null) {
+        await _saveBackup(next);
+      }
+    } finally {
+      saving = false;
+      _notify();
+    }
+    if (!wasLoaded && _pollAfterLoad) await _monitor();
   }
 
   Future<T> _change<T>(
@@ -289,7 +472,7 @@ class AppController extends ChangeNotifier {
     _notify();
     try {
       final result = await action();
-      await store.write(_state());
+      await _persist();
       return result;
     } on Object {
       _restore(before, retainedProfiles: previousProfiles);
@@ -934,7 +1117,7 @@ class AppController extends ChangeNotifier {
       status = VpnStatus.connecting;
       _notify();
       await _startSession(config, assets, selected);
-      await store.write(_state());
+      await _persist();
       _log('已切换到$label');
     } on Object catch (e) {
       selectedId = previousId;
@@ -1051,5 +1234,6 @@ class AppController extends ChangeNotifier {
 AppController createController() => AppController(
   backend: Platform.isAndroid ? AndroidCoreBackend() : DesktopCoreBackend(),
   store: SecureProfileStore(),
+  backupStore: SecureProfileStore(backup: true),
   platform: Platform.operatingSystem,
 );

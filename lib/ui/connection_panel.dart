@@ -5,9 +5,14 @@ import '../services/config_builder.dart';
 import 'calm_theme.dart';
 
 class ConnectionPanel extends StatelessWidget {
-  const ConnectionPanel(this.c, {super.key, required this.onImport});
+  const ConnectionPanel(
+    this.c, {
+    super.key,
+    required this.onImport,
+    required this.onManageNodes,
+  });
   final AppController c;
-  final VoidCallback onImport;
+  final VoidCallback onImport, onManageNodes;
   @override
   Widget build(BuildContext context) {
     final title = switch (c.status) {
@@ -76,22 +81,17 @@ class ConnectionPanel extends StatelessWidget {
                               color: Calm.of(context).ink,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          Text(
-                            c.connected
-                                ? '已运行 ${_time(c.uptime)}'
-                                : c.routing == RoutingMode.direct
-                                ? '系统直连，无需代理节点'
-                                : node == null
-                                ? '添加节点后即可连接'
-                                : '已选 $node',
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: Calm.of(context).muted,
-                              height: 1.5,
+                          if (c.connected) const SizedBox(height: 8),
+                          if (c.connected)
+                            Text(
+                              '已运行 ${_time(c.uptime)}',
+                              maxLines: 3,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Calm.of(context).muted,
+                                height: 1.5,
+                              ),
                             ),
-                          ),
                           if (node == null && c.routing != RoutingMode.direct)
                             Padding(
                               padding: const EdgeInsets.only(top: 16),
@@ -137,6 +137,25 @@ class ConnectionPanel extends StatelessWidget {
                 ),
               ),
             ),
+            if (c.displayProfile case final profile?)
+              ListTile(
+                contentPadding: EdgeInsets.symmetric(
+                  horizontal: large ? 28 : 16,
+                ),
+                leading: const Icon(Icons.hub_outlined),
+                title: Text(
+                  profile.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                subtitle: Text(
+                  profile.endpointLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: onManageNodes,
+              ),
             Padding(
               padding: EdgeInsets.symmetric(
                 horizontal: large ? 28 : 16,
