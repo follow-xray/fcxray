@@ -69,6 +69,23 @@ jobs:
           flutter-version: '3.44.0'
           channel: stable
           cache: true
+      # Flutter's included plugin build resolves its own plugins independently
+      # of android/settings.gradle.kts. Keep this in the workflow so it also
+      # applies when workflow_dispatch checks out an older release tag.
+      - name: Resolve Flutter Gradle plugin dependencies from Maven Central
+        run: |
+          init_dir="${GRADLE_USER_HOME:-$HOME/.gradle}/init.d"
+          mkdir -p "$init_dir"
+          cat > "$init_dir/fcxray-flutter-plugin-repositories.gradle" <<'GRADLE'
+          gradle.beforeSettings { settings ->
+              if (settings.settingsDir.toPath().endsWith('packages/flutter_tools/gradle')) {
+                  settings.pluginManagement.repositories {
+                      mavenCentral()
+                      gradlePluginPortal()
+                  }
+              }
+          }
+          GRADLE
       - name: Install pinned SDK packages with the runner's sdkmanager
         run: |
           sdk="${ANDROID_HOME:?Missing Android SDK on the runner}"
