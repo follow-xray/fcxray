@@ -1,10 +1,8 @@
 # fcxray
 
-基于 Flutter 与 [Xray-core](https://github.com/XTLS/Xray-core) 的开源 VPN 客户端，面向 Android、Windows 和 macOS。许可证为 **MPL-2.0**。这是独立社区客户端，与 XTLS 官方没有隶属关系。
+基于 Flutter 与 [Xray-core](https://github.com/XTLS/Xray-core) 的开源 VPN 客户端，面向 Android、Windows 和 macOS；iOS 无法上架 AppStore 故暂不支持。许可证为 **MPL-2.0**。这是独立社区客户端，与 XTLS 官方没有隶属关系（没这个）。
 
 项目目录、Dart 包名和应用显示名称均为 `fcxray`。Android applicationId / namespace、macOS Bundle ID 和 Windows AppUserModelID 统一使用 `com.fcxray.client`。桌面产物为 `fcxray.app` / `fcxray.exe`。
-
-> 当前版本：0.7.1，开发预览。已实现真实内核接入，不提供服务器或节点。上线分发前仍需完成真机 TUN、DNS、网络切换及签名验证。
 
 [桌面界面预览](docs/previews/desktop.png) · [手机界面预览](docs/previews/mobile.png) · [深色主题预览](docs/previews/desktop-dark.png)
 
@@ -23,7 +21,7 @@
 - 多个 HTTPS 订阅、批量导入、按来源筛选和定时更新；连接中优先通过当前本地代理下载，失败从头重试系统网络。更新下次连接生效，不重启当前隧道。
 - 查看真实运行中配置快照或下次启动预览，支持凭据隐藏/显示与 JSON 复制。
 - GeoIP / GeoSite `.dat` 本地导入、HTTPS 更新、自定义来源、可选 SHA-256 固定校验、分类浏览与分流。
-- Xray 源码版本固定；不修改上游源码。
+- Xray 源码版本固定；不修改上游源码。随时观察xray-core，手动随内核更新而更新。
 
 ## 平台实现
 
