@@ -18,6 +18,7 @@ class MainFlutterWindow: NSWindow {
     self.contentViewController = flutterViewController
     self.setFrame(NSRect(origin: windowFrame.origin, size: NSSize(width: 1120, height: 800)), display: true)
     self.minSize = NSSize(width: 480, height: 600)
+    setFrameAutosaveName("com.fcxray.client.MainWindow")
 
     let tray = FlutterMethodChannel(name: "com.fcxray.client/window",
                                    binaryMessenger: flutterViewController.engine.binaryMessenger)

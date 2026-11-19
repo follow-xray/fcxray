@@ -5,7 +5,57 @@ import 'package:fcxray/services/profile_importer.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'test_support.dart';
 
+class ProbeWorker extends FakeBackend {
+  int probes = 0;
+  bool closed = false;
+  @override
+  Future<Map<String, dynamic>> call(
+    String method, [
+    String? config,
+    String? assets,
+  ]) async {
+    expect(method, 'probe');
+    expect(closed, false);
+    probes++;
+    await Future<void>.delayed(Duration.zero);
+    if (probes == 1) throw StateError('candidate failed');
+    return {'ms': 3};
+  }
+
+  @override
+  Future<void> close() async {
+    closed = true;
+  }
+}
+
 void main() {
+  test(
+    'desktop batch bounds helper count and closes each worker after failures',
+    () async {
+      final workers = <ProbeWorker>[];
+      final service = NodeLatency(
+        concurrency: 3,
+        createProbeBackend: () {
+          final helper = ProbeWorker();
+          workers.add(helper);
+          return helper;
+        },
+      );
+      addTearDown(service.dispose);
+      final nodes = ProfileImporter.parse(
+        List.generate(
+          19,
+          (i) => 'trojan://p@node.example:${10000 + i}#N$i',
+        ).join('\n'),
+      );
+      await service.run(nodes);
+      expect(workers.length, 3);
+      expect(workers.every((w) => w.closed), true);
+      expect(service.completed, 19);
+      expect(nodes.where((p) => service.result(p) == -1), hasLength(3));
+      expect(nodes.where((p) => service.result(p) == 3), hasLength(16));
+    },
+  );
   test(
     'batch tests other nodes without changing a live session or selection',
     () async {

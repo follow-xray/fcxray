@@ -56,6 +56,13 @@ class DesktopTray with TrayListener, WindowListener {
     try {
       // Build on demand so polling and subscription refreshes can't replace a
       // native menu while the user is choosing a node.
+      if (controller.loaded) {
+        // Keep the native menu accessible even when the core is unresponsive.
+        await controller.refresh().timeout(
+          const Duration(milliseconds: 400),
+          onTimeout: () {},
+        );
+      }
       await trayManager.setContextMenu(buildMenu());
       await trayManager.popUpContextMenu();
     } finally {

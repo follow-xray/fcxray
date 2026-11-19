@@ -105,6 +105,9 @@ class ConfigBuilder {
               },
             'settings': {
               'mtu': 1500,
+              // Android supplies an open TUN fd. A logical name avoids Xray's
+              // desktop interface-name discovery, which needs restricted netlink.
+              if (android) 'name': 'fcxray',
               if (!android) ...{
                 'gateway': ['172.19.0.1/30', 'fdfe:dcba:9876::1/126'],
                 'autoSystemRoutingTable': ['0.0.0.0/0', '::/0'],

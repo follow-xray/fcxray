@@ -47,6 +47,10 @@ class _NodesPanelState extends State<NodesPanel> {
     final latency = c.latency;
     final nodes = sortByLatency ? latency.sorted(filtered) : filtered;
     final testable = filtered.where((p) => !p.isUtility);
+    final active = c.activeProfile;
+    final activeFingerprint = active == null
+        ? null
+        : AppController.fingerprint(active);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -178,7 +182,7 @@ class _NodesPanelState extends State<NodesPanel> {
                 ),
                 title: Text(p.name, overflow: TextOverflow.ellipsis),
                 subtitle: Text(
-                  '${p.protocol.toUpperCase()} · ${p.endpointLabel}\n${latency.label(p)} · ${c.sourceName(p)}${c.connected && c.activeProfile != null && AppController.fingerprint(c.activeProfile!) == AppController.fingerprint(p) ? ' · 当前连接' : ''}',
+                  '${p.protocol.toUpperCase()} · ${p.endpointLabel}\n${latency.label(p)} · ${c.sourceName(p)}${p.id == active?.id && AppController.fingerprint(p) == activeFingerprint ? ' · 当前连接' : ''}',
                   style: TextStyle(fontSize: 12, color: Calm.of(context).muted),
                 ),
                 isThreeLine: true,

@@ -82,6 +82,33 @@ class AppController extends ChangeNotifier {
   DateTime? _lastPoll;
   final List<String> logs = [];
   Timer? _timer, _maintenance;
+  bool _visible = true, _overview = true;
+  int _sessionRevision = 0;
+
+  void setPollingView({required bool visible, required bool overview}) {
+    if (_visible == visible && _overview == overview) return;
+    final resume = visible && (!_visible || (overview && !_overview));
+    _visible = visible;
+    _overview = overview;
+    if (_timer == null || _disposed || _exiting) return;
+    _scheduleStatusPoll();
+    if (resume) unawaited(refresh());
+  }
+
+  void _scheduleStatusPoll() {
+    _timer?.cancel();
+    _timer = Timer.periodic(
+      Duration(
+        seconds: !_visible
+            ? 30
+            : _overview
+            ? 1
+            : 5,
+      ),
+      (_) => unawaited(refresh()),
+    );
+  }
+
   bool _switchingNode = false;
   bool _exiting = false;
   bool get busy =>
@@ -222,10 +249,8 @@ class AppController extends ChangeNotifier {
     }
     if (poll && loaded) {
       await refresh();
-      _timer = Timer.periodic(
-        const Duration(seconds: 1),
-        (_) => unawaited(refresh()),
-      );
+      if (_disposed || _exiting) return;
+      _scheduleStatusPoll();
       _maintenance = Timer.periodic(
         const Duration(minutes: 1),
         (_) => unawaited(updateDue()),
@@ -716,6 +741,7 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> _toggleConnection() async {
+    _sessionRevision++;
     error = null;
     if (connected) {
       status = VpnStatus.disconnecting;
@@ -911,13 +937,18 @@ class AppController extends ChangeNotifier {
   Future<void> refresh() async {
     if (_polling || busy || _disposed) return;
     _polling = true;
+    final revision = _sessionRevision;
+    bool stale() => _disposed || busy || revision != _sessionRevision;
+    final before = _statusView;
     try {
       final snapshot = await backend.call('status');
-      if (busy) return;
-      _apply(snapshot);
+      if (stale()) return;
       if (snapshot['running'] == true) {
         if (_activeConfig == null || snapshot['sessionId'] != _sessionId) {
-          _rememberSession(await backend.call('config'));
+          final config = await backend.call('config');
+          if (stale()) return;
+          if (config['running'] != true) return;
+          _rememberSession(config);
         }
         status = VpnStatus.connected;
       } else if (connected) {
@@ -928,14 +959,32 @@ class AppController extends ChangeNotifier {
         _sessionId = null;
         _log('系统已停止 VPN');
       }
+      _apply(snapshot);
     } on Object catch (e) {
+      if (stale()) return;
       if (connected) _failure(e);
       if (coreVersion == '待检测') error = '$e';
     } finally {
       _polling = false;
-      _notify();
+      if (!stale() && _statusView != before) _notify();
     }
   }
+
+  // Idle snapshots are identical apart from the private sampling timestamp.
+  // Rebuilding every node card on every such snapshot adds no information.
+  (VpnStatus, String, String?, Profile?, String?, int, int, int, double, double)
+  get _statusView => (
+    status,
+    coreVersion,
+    error,
+    _activeProfile,
+    _sessionId,
+    upload,
+    download,
+    uptime,
+    uploadRate,
+    downloadRate,
+  );
 
   void _apply(Map<String, dynamic> snapshot) {
     coreVersion = snapshot['version'] as String? ?? coreVersion;

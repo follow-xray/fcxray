@@ -5,28 +5,35 @@ import 'package:flutter/services.dart';
 import '../models/profile.dart';
 import 'core_backend.dart';
 
-Future<int> measureNodeLatency(Profile profile) async {
+Future<int> measureNodeLatency(
+  Profile profile, {
+  CoreBackend? probeBackend,
+}) async {
   final outbound = jsonEncode(profile.outbound);
   if (Platform.isAndroid) {
     const channel = MethodChannel('com.fcxray.client/core');
     return await channel.invokeMethod<int>('latency', {'outbound': outbound}) ??
         -1;
   }
-  // This helper only handles this probe. It never receives the session's
-  // config, TUN descriptor, elevation request, start, or stop command.
-  final helper = DesktopCoreBackend();
+  // A batch worker owns its helper. A standalone call owns a one-off helper.
+  final helper = probeBackend ?? DesktopCoreBackend();
   try {
     final response = await helper.call('probe', outbound);
     return response['ms'] as int;
   } finally {
-    await helper.close();
+    if (probeBackend == null) await helper.close();
   }
 }
 
 class NodeLatency extends ChangeNotifier {
-  NodeLatency({this.measure = measureNodeLatency, int? concurrency})
-    : concurrency = concurrency ?? (Platform.isAndroid ? 1 : 3);
-  final Future<int> Function(Profile) measure;
+  NodeLatency({
+    this.measure,
+    int? concurrency,
+    this.createProbeBackend = DesktopCoreBackend.new,
+  }) : concurrency = concurrency ?? (Platform.isAndroid ? 1 : 3),
+       assert(concurrency == null || concurrency > 0);
+  final Future<int> Function(Profile)? measure;
+  final CoreBackend Function() createProbeBackend;
   final int concurrency;
   // Results expire with a replaced profile, including edits retaining its ID.
   final _results = Expando<int>();
@@ -66,24 +73,36 @@ class NodeLatency extends ChangeNotifier {
     total = jobs.length;
     var next = 0;
     Future<void> worker() async {
-      while (!_disposed && !stopping && next < jobs.length) {
-        final profile = jobs[next++];
-        _testing.add(profile);
-        notifyListeners();
-        try {
-          _results[profile] = await measure(profile);
-        } on Object {
-          _results[profile] = -1;
-        } finally {
-          completed++;
-          _testing.remove(profile);
-          if (!_disposed) notifyListeners();
+      final helper = measure == null && !Platform.isAndroid
+          ? createProbeBackend()
+          : null;
+      try {
+        while (!_disposed && !stopping && next < jobs.length) {
+          final profile = jobs[next++];
+          _testing.add(profile);
+          notifyListeners();
+          try {
+            final probe = measure;
+            _results[profile] = probe != null
+                ? await probe(profile)
+                : await measureNodeLatency(profile, probeBackend: helper);
+          } on Object {
+            _results[profile] = -1;
+          } finally {
+            completed++;
+            _testing.remove(profile);
+            if (!_disposed) notifyListeners();
+          }
         }
+      } finally {
+        await helper?.close();
       }
     }
 
     try {
-      await Future.wait(List.generate(concurrency, (_) => worker()));
+      await Future.wait(
+        List.generate(concurrency.clamp(1, jobs.length), (_) => worker()),
+      );
     } finally {
       busy = false;
       if (!_disposed) notifyListeners();

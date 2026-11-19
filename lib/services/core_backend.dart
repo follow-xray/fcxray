@@ -202,6 +202,12 @@ class DesktopCoreBackend implements CoreBackend {
       final result = await c.future.timeout(const Duration(seconds: 30));
       if (method == 'stop' && _elevated) await _closeProcess();
       return result;
+    } on TimeoutException {
+      // A stuck probe must not delay the remaining jobs on this worker.
+      if (method == 'probe' || method == 'start' || method == 'stop') {
+        await _closeProcess();
+      }
+      rethrow;
     } on Object {
       // A failed/timed-out start must not leave an untracked privileged VPN.
       if (method == 'start' || method == 'stop') await _closeProcess();

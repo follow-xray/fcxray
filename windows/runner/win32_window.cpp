@@ -26,6 +26,22 @@ constexpr const wchar_t kGetPreferredBrightnessRegKey[] =
   L"Software\\Microsoft\\Windows\\CurrentVersion\\Themes\\Personalize";
 constexpr const wchar_t kGetPreferredBrightnessRegValue[] = L"AppsUseLightTheme";
 
+// Save only the normal rectangle. A session closed from the tray or minimized
+// should still open visibly the next time. WINDOWPLACEMENT uses workspace
+// coordinates and lets Windows handle a monitor that has been disconnected.
+constexpr wchar_t kWindowSettings[] = L"Software\\fcxray\\Window";
+constexpr wchar_t kNormalBounds[] = L"NormalBounds";
+
+void SaveNormalBounds(HWND hwnd) {
+  WINDOWPLACEMENT placement{};
+  placement.length = sizeof(placement);
+  if (GetWindowPlacement(hwnd, &placement) &&
+      !IsRectEmpty(&placement.rcNormalPosition)) {
+    RegSetKeyValueW(HKEY_CURRENT_USER, kWindowSettings, kNormalBounds,
+                    REG_BINARY, &placement.rcNormalPosition, sizeof(RECT));
+  }
+}
+
 // The number of Win32Window objects that currently exist.
 static int g_active_window_count = 0;
 
@@ -150,6 +166,18 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
+  RECT saved{};
+  DWORD bytes = sizeof(saved);
+  WINDOWPLACEMENT placement{};
+  placement.length = sizeof(placement);
+  if (RegGetValueW(HKEY_CURRENT_USER, kWindowSettings, kNormalBounds,
+                   RRF_RT_REG_BINARY, nullptr, &saved, &bytes) == ERROR_SUCCESS &&
+      bytes == sizeof(saved) && !IsRectEmpty(&saved) &&
+      GetWindowPlacement(window_handle_, &placement)) {
+    placement.rcNormalPosition = saved;
+    placement.showCmd = SW_SHOWNORMAL;
+    if (SetWindowPlacement(window_handle_, &placement)) return true;
+  }
   return ShowWindow(window_handle_, SW_SHOWNORMAL);
 }
 
@@ -167,6 +195,10 @@ LRESULT CALLBACK Win32Window::WndProc(HWND const window,
     EnableFullDpiSupportIfAvailable(window);
     that->window_handle_ = window;
   } else if (Win32Window* that = GetThisFromHandle(window)) {
+    // window_manager consumes WM_EXITSIZEMOVE in its Flutter delegate.
+    if (message == WM_EXITSIZEMOVE || message == WM_DESTROY) {
+      SaveNormalBounds(window);
+    }
     return that->MessageHandler(window, message, wparam, lparam);
   }
 

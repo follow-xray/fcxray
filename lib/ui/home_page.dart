@@ -35,6 +35,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _syncPolling(WidgetsBinding.instance.lifecycleState);
   }
 
   @override
@@ -46,7 +47,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed) c.refresh();
+    _syncPolling(state);
+  }
+
+  void _syncPolling(AppLifecycleState? state) {
+    c.setPollingView(
+      visible:
+          state == null ||
+          state == AppLifecycleState.resumed ||
+          state == AppLifecycleState.inactive,
+      overview: page == 0,
+    );
+  }
+
+  void _goTo(int next) {
+    if (next == page) return;
+    setState(() => page = next);
+    _syncPolling(WidgetsBinding.instance.lifecycleState);
   }
 
   @override
@@ -55,7 +72,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     builder: (context, _) => LayoutBuilder(
       builder: (context, constraints) {
         final wide = constraints.maxWidth >= 820;
-        return Scaffold(
+        final scaffold = Scaffold(
           body: SafeArea(
             child: Row(
               children: [
@@ -140,8 +157,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ? null
               : NavigationBar(
                   selectedIndex: page < 5 ? page : 4,
-                  onDestinationSelected: (value) =>
-                      setState(() => page = value),
+                  onDestinationSelected: _goTo,
                   destinations: const [
                     NavigationDestination(
                       icon: Icon(Icons.dashboard_outlined),
@@ -162,6 +178,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     NavigationDestination(icon: Icon(Icons.tune), label: '设置'),
                   ],
                 ),
+        );
+        return PopScope<Object?>(
+          canPop: c.platform != 'android' || page == 0,
+          onPopInvokedWithResult: (didPop, _) {
+            if (!didPop && c.platform == 'android' && page != 0) {
+              _goTo(page == 5 ? 4 : 0);
+            }
+          },
+          child: scaffold,
         );
       },
     ),
@@ -219,7 +244,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       selectedTileColor: Calm.of(context).lilac,
                       leading: Icon(navIcons[i], size: 21),
                       title: Text(titles[i]),
-                      onTap: () => setState(() => page = i),
+                      onTap: () => _goTo(i),
                     ),
                   ),
               ],
@@ -266,7 +291,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   Widget _overview() => Column(
     crossAxisAlignment: CrossAxisAlignment.stretch,
     children: [
-      if (c.pendingChanges)
+      if (c.pendingChanges) ...[
         Card(
           color: Calm.of(context).mint,
           child: Padding(
@@ -276,7 +301,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             ),
           ),
         ),
-      if (c.pendingChanges) const SizedBox(height: 16),
+        const SizedBox(height: 16),
+      ],
       ConnectionPanel(c, onImport: _import),
       if (c.error != null)
         Padding(padding: const EdgeInsets.only(top: 16), child: _errorCard()),
@@ -335,10 +361,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
             ),
           ),
-          TextButton(
-            onPressed: () => setState(() => page = 1),
-            child: const Text('管理节点 →'),
-          ),
+          TextButton(onPressed: () => _goTo(1), child: const Text('管理节点 →')),
         ],
       ),
       const SizedBox(height: 6),
@@ -402,7 +425,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 title: Text(title),
                 subtitle: Text(summary),
                 trailing: const Icon(Icons.chevron_right_rounded),
-                onTap: () => setState(() => page = target),
+                onTap: () => _goTo(target),
               ),
             ),
           );
@@ -624,7 +647,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     label: const Text('查看配置'),
                   ),
                   OutlinedButton.icon(
-                    onPressed: () => setState(() => page = 5),
+                    onPressed: () => _goTo(5),
                     icon: const Icon(Icons.terminal),
                     label: const Text('运行日志'),
                   ),

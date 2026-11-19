@@ -89,6 +89,9 @@ void main() {
         routing: mode,
         overrides: overrides,
       );
+      final tun = cfg['inbounds'][0]['settings'];
+      expect(tun['name'], 'fcxray');
+      expect(tun.containsKey('autoOutboundsInterface'), false);
       final rules = cfg['routing']['rules'] as List;
       expect(rules.first['outboundTag'], 'dns-out');
       expect(

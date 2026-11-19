@@ -54,6 +54,36 @@ void main() {
     expect(find.text('自定义 · Demo/3'), findsOneWidget);
   });
 
+  testWidgets('Android back unwinds a dialog, logs, and settings in order', (
+    t,
+  ) async {
+    final c = AppController(
+      backend: FakeBackend(),
+      store: MemoryStore(),
+      platform: 'android',
+    );
+    await c.initialize(poll: false);
+    await t.pumpWidget(FcxrayApp(controller: c));
+    await t.tap(find.text('设置'));
+    await t.pumpAndSettle();
+    await t.ensureVisible(find.text('订阅 User-Agent'));
+    await t.tap(find.text('订阅 User-Agent'));
+    await t.pumpAndSettle();
+    await t.binding.handlePopRoute();
+    await t.pumpAndSettle();
+    expect(find.text('连接设置'), findsOneWidget);
+    final logs = find.text('运行日志');
+    await t.ensureVisible(logs);
+    await t.tap(logs);
+    await t.pumpAndSettle();
+    expect(find.textContaining('本次运行'), findsOneWidget);
+    await t.binding.handlePopRoute();
+    await t.pumpAndSettle();
+    expect(find.text('连接设置'), findsOneWidget);
+    await t.binding.handlePopRoute();
+    await t.pumpAndSettle();
+    expect(find.text('连接总览'), findsOneWidget);
+  });
   for (final width in [390.0, 1280.0]) {
     testWidgets(
       'manual form, subscriptions, rules, and config are reachable at width $width',

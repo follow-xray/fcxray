@@ -99,6 +99,8 @@ class FcxrayVpnService : VpnService(), Protector {
                     .addAddress("fdfe:dcba:9876::1", 126)
                     .addRoute("0.0.0.0", 0).addRoute("::", 0)
                     .addDnsServer("1.1.1.1")
+                    // Inherit the underlying network's metering on Android 10+.
+                    .apply { if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) setMetered(false) }
                     // Covers the Go runtime's own bootstrap DNS sockets too.
                     .addDisallowedApplication(packageName)
                     .establish() ?: error("VPN permission was revoked")
