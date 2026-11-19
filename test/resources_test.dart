@@ -32,6 +32,7 @@ class RecordingFetcher extends ResourceFetcher {
   @override
   Future<String> subscription(
     String url, {
+    void Function(SubscriptionUsage?)? onUsage,
     String userAgent = SubscriptionAgent.xrayHeader,
     Uri? proxy,
     void Function(DownloadRoute)? onRoute,
@@ -128,7 +129,10 @@ void main() {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
       addTearDown(server.close);
       var payloadA = '${node('a.example', 'A')}\n${node('b.example', 'B')}';
+      var reported =
+          'upload=1024; download=2048; total=8192; expire=1893456000';
       server.listen((request) async {
+        request.response.headers.set('Subscription-Userinfo', reported);
         request.response.write(
           request.uri.path == '/a' ? payloadA : node('c.example', 'C'),
         );
@@ -153,16 +157,30 @@ void main() {
       expect(c.profiles, hasLength(4));
       final selected = c.profiles.firstWhere((p) => p.host == 'b.example');
       await c.select(selected.id);
+      final order = c.profiles.map((p) => p.id).toList();
+      store.fail = true;
+      await expectLater(c.updateSubscription(ids.first), throwsStateError);
+      expect(c.selected, same(selected));
+      store.fail = false;
+      expect(await c.updateSubscription(ids.first), true);
+      expect(c.profiles.map((p) => p.id), order);
+      expect(
+        c.selected,
+        same(selected),
+      ); // Same object retains the latency cache.
+      expect(c.subscriptions.first.usage!.expire, 1893456000);
       payloadA =
           '${node('b.example', 'Renamed B')}\n${node('new.example', 'New')}';
       expect(await c.updateSubscription(ids.first), true);
       expect(c.selectedId, selected.id);
       expect(c.selected!.name, 'Renamed B');
       expect(c.profiles.any((p) => p.host == 'a.example'), false);
+      reported = 'upload=999';
       payloadA = '<html>subscription error</html>';
       expect(await c.updateSubscription(ids.first), false);
       expect(c.selectedId, selected.id);
       expect(c.subscriptions.first.error, isNotNull);
+      expect(c.subscriptions.first.usage!.upload, 1024);
       await c.removeSubscription(ids.first);
       expect(
         c.profiles.map((p) => p.host),
@@ -176,6 +194,7 @@ void main() {
       addTearDown(reloaded.dispose);
       await reloaded.initialize(poll: false);
       expect(reloaded.subscriptions, hasLength(1));
+      expect(reloaded.subscriptions.single.usage!.download, 2048);
       expect(reloaded.profiles, hasLength(2));
     },
   );
@@ -351,13 +370,26 @@ void main() {
         await dir.list().where((f) => f.path.contains('.stage-')).length,
         0,
       );
+      final damaged = File('${dir.path}/${ip.fileName}');
+      final corruptBytes = [...ipFixture()]..[3] ^= 1;
+      await damaged.writeAsBytes(corruptBytes);
+      await expectLater(geo.ensureAvailable([ip]), throwsFormatException);
+      final repaired = await geo.install(ip, Stream.value(ipFixture()));
+      expect(repaired.hash, ip.hash);
+      expect(repaired.fileName, isNot(ip.fileName));
+      expect(await damaged.readAsBytes(), corruptBytes);
+      await geo.ensureAvailable([repaired, site]);
+      expect(
+        (await geo.install(repaired, Stream.value(ipFixture()))).fileName,
+        repaired.fileName,
+      );
       final config = ConfigBuilder.build(
         ProfileImporter.parse(node('example.com', 'Test')).single,
         platform: 'macos',
         mode: ConnectionMode.proxy,
         routing: RoutingMode.rules,
         useGeo: true,
-        geoAssets: {'geoip': ip, 'geosite': site},
+        geoAssets: {'geoip': repaired, 'geosite': site},
       );
       await backend.call('validate', jsonEncode(config), dir.path);
       expect(

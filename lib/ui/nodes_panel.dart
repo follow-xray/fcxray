@@ -6,6 +6,7 @@ import 'help_fields.dart';
 import 'node_editor.dart';
 import 'package:flutter/services.dart';
 import '../services/profile_importer.dart';
+import '../services/config_builder.dart';
 
 class NodesPanel extends StatefulWidget {
   const NodesPanel({
@@ -146,7 +147,11 @@ class _NodesPanelState extends State<NodesPanel> {
           Padding(
             padding: EdgeInsets.only(bottom: 14),
             child: Text(
-              '连接或更新期间不可编辑节点。',
+              c.connected && c.resourcesEditable
+                  ? (c.routing == RoutingMode.direct
+                        ? '点击节点可选择下次使用的代理。'
+                        : '点击节点会重新连接；启动或保存失败时会尝试恢复原连接。')
+                  : '连接或更新期间不可编辑节点。',
               style: TextStyle(color: Calm.of(context).muted),
             ),
           ),
@@ -173,7 +178,7 @@ class _NodesPanelState extends State<NodesPanel> {
                 ),
               ),
               child: ListTile(
-                onTap: c.editable ? () => c.select(p.id) : null,
+                onTap: c.resourcesEditable ? () => _select(p) : null,
                 leading: Icon(
                   c.selectedId == p.id
                       ? Icons.radio_button_checked
@@ -230,6 +235,22 @@ class _NodesPanelState extends State<NodesPanel> {
           ),
       ],
     );
+  }
+
+  Future<void> _select(Profile profile) async {
+    final controller = c;
+    String? message;
+    try {
+      await controller.switchNode(profile.id);
+      message = controller.error;
+    } on Object {
+      message = '节点选择保存失败，请重试。';
+    }
+    if (message != null && mounted) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(message)));
+    }
   }
 
   Future<void> _openExample() async {

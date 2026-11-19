@@ -9,6 +9,43 @@ void main() {
   final executable =
       '${Directory.current.path}/native/bin/fcxray-core${Platform.isWindows ? '.exe' : ''}';
   test(
+    'malformed response completes its caller without waiting for the IPC timeout',
+    () async {
+      final dir = await Directory.systemTemp.createTemp('fcxray-ipc-');
+      addTearDown(() => dir.delete(recursive: true));
+      final script = File('${dir.path}/helper');
+      await script.writeAsString("""#!/bin/sh
+read -r request
+echo '{"id":1,"result":[]}'
+cat >/dev/null
+""");
+      await Process.run('chmod', ['700', script.path]);
+      final backend = DesktopCoreBackend(executable: script.path);
+      addTearDown(backend.close);
+      await expectLater(
+        backend.call('status').timeout(const Duration(seconds: 5)),
+        throwsStateError,
+      );
+    },
+    skip: Platform.isWindows,
+  );
+  test(
+    'close during core creation drains pending calls and releases ownership',
+    () async {
+      final backend = DesktopCoreBackend(executable: executable);
+      final starting = backend.call('status');
+      final rejected = expectLater(starting, throwsStateError);
+      // _request has entered Process.start but the process handle is not yet delivered.
+      await Future<void>.value();
+      final stopping = backend.close();
+      expect(identical(stopping, backend.close()), true);
+      await stopping;
+      await rejected;
+      await expectLater(backend.call('status'), throwsStateError);
+    },
+    skip: !File(executable).existsSync(),
+  );
+  test(
     'desktop IPC reports native failures, recovers, and releases listeners',
     () async {
       final reservation = await ServerSocket.bind(

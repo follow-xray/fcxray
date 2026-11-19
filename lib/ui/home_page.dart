@@ -1,4 +1,5 @@
 import 'calm_theme.dart';
+import 'format_bytes.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../controllers/app_controller.dart';
@@ -323,7 +324,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             children: [
               _metric(
                 '下载速度',
-                '${_bytes(c.downloadRate)}/s',
+                '${formatBytes(c.downloadRate)}/s',
                 Icons.south_west_rounded,
                 width,
                 compact,
@@ -332,7 +333,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
               _metric(
                 '上传速度',
-                '${_bytes(c.uploadRate)}/s',
+                '${formatBytes(c.uploadRate)}/s',
                 Icons.north_east_rounded,
                 width,
                 compact,
@@ -341,7 +342,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
               _metric(
                 '会话流量',
-                _bytes((c.upload + c.download).toDouble()),
+                formatBytes((c.upload + c.download).toDouble()),
                 Icons.swap_vert_rounded,
                 width,
                 compact,
@@ -512,7 +513,15 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             c.error!,
             style: TextStyle(fontSize: 12, color: Calm.of(context).muted),
           ),
-          if (c.platform != 'android' && c.mode == ConnectionMode.vpn)
+          if (!c.loaded)
+            TextButton.icon(
+              onPressed: c.initializing ? null : () => c.initialize(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('重新读取配置'),
+            ),
+          if (c.loaded &&
+              c.platform != 'android' &&
+              c.mode == ConnectionMode.vpn)
             Padding(
               padding: EdgeInsets.only(top: 8),
               child: Text(
@@ -816,15 +825,4 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     await Future<void>.delayed(const Duration(milliseconds: 300));
     text.dispose();
   }
-}
-
-String _bytes(double value) {
-  const units = ['B', 'KB', 'MB', 'GB'];
-  var n = value;
-  var unit = 0;
-  while (n >= 1024 && unit < units.length - 1) {
-    n /= 1024;
-    unit++;
-  }
-  return '${n.toStringAsFixed(unit == 0 ? 0 : 1)} ${units[unit]}';
 }

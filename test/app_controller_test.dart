@@ -22,6 +22,29 @@ class PollBackend extends FakeBackend {
 }
 
 void main() {
+  test(
+    'bad persisted data cannot leave a partially restored client and can be retried',
+    () async {
+      final store = MemoryStore()
+        ..value = {'themeMode': 'dark', 'subscriptions': 'bad'};
+      final c = AppController(
+        backend: FakeBackend(),
+        store: store,
+        platform: 'windows',
+      );
+      addTearDown(c.dispose);
+      await c.initialize(poll: false);
+      expect(c.loaded, false);
+      expect(c.themeMode.value.name, 'system');
+      expect(c.error, contains('配置格式'));
+      expect(store.value!['subscriptions'], 'bad');
+      store.value = {'themeMode': 'dark'};
+      await c.initialize(poll: false);
+      expect(c.loaded, true);
+      expect(c.themeMode.value.name, 'dark');
+      expect(c.error, isNull);
+    },
+  );
   testWidgets(
     'hidden status polls slow down and resume immediately without idle rebuilds',
     (t) async {

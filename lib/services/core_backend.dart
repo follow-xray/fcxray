@@ -40,6 +40,8 @@ class DesktopCoreBackend implements CoreBackend {
   Directory? _socketDirectory;
   bool _elevated = false;
   bool _closed = false;
+  Future<void>? _closing;
+  Completer<Socket>? _cancelHandshake;
   Future<void> _queue = Future.value();
   int _sequence = 0;
   final _pending = <int, Completer<Map<String, dynamic>>>{};
@@ -79,7 +81,6 @@ class DesktopCoreBackend implements CoreBackend {
         0,
       );
       try {
-        final accepted = listener.first;
         final command =
             '${_shellQuote(path)} --socket ${_shellQuote(socketPath)}';
         process = await Process.start('/usr/bin/osascript', [
@@ -89,8 +90,18 @@ class DesktopCoreBackend implements CoreBackend {
         _process = process;
         process.stderr.listen((_) {});
         process.stdout.listen((_) {});
+        // close() may run while Process.start is still resolving.
+        if (_closed) throw StateError('内核连接已关闭');
+        final cancel = _cancelHandshake = Completer<Socket>();
         final socket = await Future.any<Socket>([
-          accepted,
+          cancel.future,
+          listener.first.then((socket) {
+            if (_closed || !identical(_cancelHandshake, cancel)) {
+              socket.destroy();
+              throw StateError('内核连接已关闭');
+            }
+            return socket;
+          }),
           process.exitCode.then<Socket>(
             (code) => throw StateError('管理员授权被取消或内核无法启动（$code）'),
           ),
@@ -98,10 +109,8 @@ class DesktopCoreBackend implements CoreBackend {
         _socket = socket;
         _input = socket;
         output = socket;
-      } on Object {
-        await _closeProcess();
-        rethrow;
       } finally {
+        _cancelHandshake = null;
         await listener.close();
       }
     } else {
@@ -120,8 +129,8 @@ class DesktopCoreBackend implements CoreBackend {
             if (!identical(_process, process)) return;
             try {
               final message = jsonDecode(line) as Map<String, dynamic>;
-              final pending = _pending.remove(message['id']);
-              if (pending == null) return;
+              final pending = _pending[message['id']];
+              if (pending == null || pending.isCompleted) return;
               if (message['error'] != null) {
                 pending.completeError(StateError(message['error'] as String));
               } else {
@@ -185,8 +194,20 @@ class DesktopCoreBackend implements CoreBackend {
         ((jsonDecode(config!) as Map)['inbounds'] as List).any(
           (i) => i['protocol'] == 'tun',
         );
-    if (elevate && !_elevated) await _closeProcess();
-    if (_process == null) await _open(elevate);
+    if ((elevate && !_elevated) ||
+        (_process == null && _socketDirectory != null)) {
+      await _closeProcess();
+    }
+    if (_closed) throw StateError('内核连接已关闭');
+    if (_process == null) {
+      try {
+        await _open(elevate);
+      } on Object {
+        await _closeProcess();
+        rethrow;
+      }
+    }
+    if (_closed) throw StateError('内核连接已关闭');
     final id = ++_sequence;
     final c = Completer<Map<String, dynamic>>();
     _pending[id] = c;
@@ -220,14 +241,21 @@ class DesktopCoreBackend implements CoreBackend {
   Future<void> _closeProcess() async {
     final p = _process;
     try {
-      await _input?.close();
-      _socket?.destroy();
+      try {
+        await _input?.close().timeout(const Duration(seconds: 3));
+      } on TimeoutException {
+        p?.kill();
+      } on IOException {
+        // A broken pipe is already closed. Still reap the process.
+      } finally {
+        _socket?.destroy();
+      }
       if (p != null) {
         await p.exitCode.timeout(
           const Duration(seconds: 10),
           onTimeout: () {
-            p.kill();
-            return -1;
+            p.kill(ProcessSignal.sigkill);
+            return p.exitCode.timeout(const Duration(seconds: 5));
           },
         );
       }
@@ -245,8 +273,16 @@ class DesktopCoreBackend implements CoreBackend {
   }
 
   @override
-  Future<void> close() async {
+  Future<void> close() {
     _closed = true;
-    await _closeProcess();
+    final error = StateError('内核连接已关闭');
+    final handshake = _cancelHandshake;
+    if (handshake != null && !handshake.isCompleted) {
+      handshake.completeError(error);
+    }
+    _failAll(error);
+    // The in-flight request owns process creation. Wait until ownership is
+    // settled before closing pipes; repeated close calls share one cleanup.
+    return _closing ??= _queue.then((_) => _closeProcess());
   }
 }

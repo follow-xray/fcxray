@@ -18,6 +18,7 @@ class MutableFetcher extends ResourceFetcher {
   @override
   Future<String> subscription(
     String url, {
+    void Function(SubscriptionUsage?)? onUsage,
     String userAgent = SubscriptionAgent.xrayHeader,
     Uri? proxy,
     void Function(DownloadRoute)? onRoute,
@@ -43,6 +44,29 @@ class ObservedBackend implements CoreBackend {
 
   @override
   Future<void> close() => delegate.close();
+}
+
+// Exercise the real switch path without occupying the user's proxy ports.
+class TestProxyController extends AppController {
+  TestProxyController({
+    required super.backend,
+    required super.store,
+    required super.fetcher,
+    required super.geoStore,
+    required this.socks,
+    required this.http,
+  }) : super(platform: 'macos');
+  final int socks, http;
+
+  @override
+  Map<String, dynamic> buildConfig() {
+    final config = super.buildConfig();
+    for (final inbound in config['inbounds'] as List) {
+      if (inbound['protocol'] == 'socks') inbound['port'] = socks;
+      if (inbound['protocol'] == 'http') inbound['port'] = http;
+    }
+    return config;
+  }
 }
 
 Future<int> freePort() async {
@@ -220,10 +244,13 @@ void main() {
       final backend = ObservedBackend(
         DesktopCoreBackend(executable: helper.absolute.path),
       );
-      final c = AppController(
+      final store = MemoryStore();
+      final socks = await freePort(), http = await freePort();
+      final c = TestProxyController(
         backend: backend,
-        store: MemoryStore(),
-        platform: 'macos',
+        store: store,
+        socks: socks,
+        http: http,
         fetcher: const ResourceFetcher(allowLoopbackHttp: true),
         geoStore: GeoStore(backend: backend, directory: directory),
       );
@@ -247,11 +274,7 @@ void main() {
       await c.ruleOptions(geo: true);
       await c.settings(ConnectionMode.proxy, RoutingMode.rules);
       final originalFile = c.geoAssets['geoip']!.fileName!;
-      final socks = await freePort(), http = await freePort();
-      final startConfig = c.buildConfig();
-      (startConfig['inbounds'] as List)[0]['port'] = socks;
-      (startConfig['inbounds'] as List)[1]['port'] = http;
-      await backend.call('start', jsonEncode(startConfig), directory.path);
+      await c.toggle();
       await c.refresh();
       final before = await backend.call('config');
       final marker = backend.methods.length;
@@ -293,12 +316,22 @@ void main() {
         upcoming['config'] as String,
         contains(c.geoAssets['geoip']!.fileName!),
       );
-      await backend.call('stop');
-      final next = c.buildConfig();
-      (next['inbounds'] as List)[0]['port'] = socks;
-      (next['inbounds'] as List)[1]['port'] = http;
-      await backend.call('start', jsonEncode(next), directory.path);
-      await c.refresh();
+      // The original node has already disappeared from the subscription.
+      // A failed save must restore its actual snapshot, including its older Geo files.
+      store.fail = true;
+      await c.switchNode(c.selectedId!);
+      expect(c.connected, true);
+      expect(c.activeProfile!.name, 'Original');
+      expect((await backend.call('config'))['config'], before['config']);
+      expect(
+        await const ResourceFetcher(allowLoopbackHttp: true).subscription(
+          'http://127.0.0.1:${server.port}/echo',
+          proxy: Uri(scheme: 'http', host: '127.0.0.1', port: http),
+        ),
+        'still-connected',
+      );
+      store.fail = false;
+      await c.switchNode(c.selectedId!);
       expect(c.activeProfile!.name, 'Next');
       final newSession = await backend.call('config');
       expect(newSession['sessionId'], isNot(before['sessionId']));

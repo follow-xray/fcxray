@@ -1,8 +1,11 @@
 package com.fcxray.client
 
+import android.Manifest
 import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.VpnService
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import io.flutter.embedding.android.FlutterActivity
@@ -56,8 +59,13 @@ class MainActivity : FlutterActivity() {
                         pending = result
                         config = value
                         assetDirectory = call.argument<String>("assetDirectory") ?: ""
-                        val permission = VpnService.prepare(this)
-                        if (permission == null) startVpn() else startActivityForResult(permission, 1001)
+                        try {
+                            val permission = VpnService.prepare(this)
+                            if (permission == null) requestNotificationsAndStart() else startActivityForResult(permission, 1001)
+                        } catch (e: RuntimeException) {
+                            pending = null; config = null
+                            result.error("PERMISSION", e.message ?: "Cannot request VPN authorization", null)
+                        }
                     }
                     "stop" -> FcxrayVpnService.stop { value, error ->
                         handler.post { if (error == null) result.success(value) else result.error("STOP", error, null) }
@@ -71,6 +79,29 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+    }
+
+    private fun requestNotificationsAndStart() {
+        if (pending == null) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            val preferences = getSharedPreferences("vpn-permissions", MODE_PRIVATE)
+            if (!preferences.getBoolean("notificationsAsked", false)) {
+                try {
+                    requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1003)
+                    preferences.edit().putBoolean("notificationsAsked", true).apply()
+                    return
+                } catch (_: RuntimeException) {
+                    // The notification prompt is optional for starting a foreground VPN.
+                }
+            }
+        }
+        startVpn()
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1003) startVpn()
     }
 
     private fun startVpn() {
@@ -105,7 +136,7 @@ class MainActivity : FlutterActivity() {
             return
         }
         if (requestCode != 1001) return
-        if (resultCode == Activity.RESULT_OK) startVpn() else {
+        if (resultCode == Activity.RESULT_OK) requestNotificationsAndStart() else {
             pending?.error("PERMISSION", "VPN authorization was declined", null)
             pending = null; config = null
         }

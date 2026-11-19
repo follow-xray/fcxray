@@ -28,6 +28,41 @@ class _FailOnce extends FakeBackend {
 
 void main() {
   final node = ProfileImporter.parse('trojan://test@example.com:443#A').single;
+  test(
+    'failed live node switch restores the running snapshot and saved selection',
+    () async {
+      final backend = _FailOnce(), store = MemoryStore();
+      final c = AppController(
+        backend: backend,
+        store: store,
+        platform: 'windows',
+      );
+      addTearDown(c.dispose);
+      await c.initialize(poll: false);
+      await c.importText(
+        'trojan://p@one.example:443#One\ntrojan://p@two.example:443#Two',
+      );
+      final old = c.selectedId, next = c.profiles.last.id;
+      await c.toggle();
+      final running = backend.activeConfig;
+      backend.rejectStart = true;
+      await c.switchNode(next);
+      expect(c.connected, true);
+      expect(backend.activeConfig, running);
+      expect(c.activeProfile?.id, old);
+      expect(store.value!['selectedId'], old);
+      store.fail = true;
+      await c.switchNode(next);
+      expect(c.selectedId, old);
+      expect(c.connected, true);
+      expect(backend.activeConfig, running);
+      expect(c.error, isNotNull);
+      store.fail = false;
+      await c.switchNode(next);
+      expect(backend.activeConfig, isNot(running));
+      expect(store.value!['selectedId'], next);
+    },
+  );
   test('imports old modes and round-trips user preferences', () async {
     for (final old in ['global', 'bypassLan', 'geoRules']) {
       final store = MemoryStore()..value = {'routing': old};

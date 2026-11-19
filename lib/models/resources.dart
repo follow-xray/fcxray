@@ -18,6 +18,56 @@ enum SubscriptionAgent {
       value.trim().isNotEmpty && !RegExp(r'[^ -~]').hasMatch(value);
 }
 
+/// Optional byte counts and Unix expiry reported by the subscription provider.
+class SubscriptionUsage {
+  const SubscriptionUsage(this.upload, this.download, this.total, this.expire);
+  final int? upload, download, total, expire;
+
+  static SubscriptionUsage? fromFields(Map fields) {
+    int? number(String key) {
+      final raw = fields[key];
+      final n = raw is int
+          ? raw
+          : int.tryParse(raw?.toString() ?? '', radix: 10);
+      return n != null && n >= 0 ? n : null;
+    }
+
+    final up = number('upload'),
+        down = number('download'),
+        advertisedTotal = number('total');
+    final total = advertisedTotal == 0 ? null : advertisedTotal;
+    final seconds = number('expire');
+    // Zero means no advertised expiry. Bound conversion to a displayable year.
+    final expiry = seconds != null && seconds > 0 && seconds <= 253402300799
+        ? seconds
+        : null;
+    return up == null && down == null && total == null && expiry == null
+        ? null
+        : SubscriptionUsage(up, down, total, expiry);
+  }
+
+  static SubscriptionUsage? parse(String? header) {
+    if (header == null) return null;
+    final fields = <String, String>{};
+    for (final pair in header.split(RegExp('[;,]'))) {
+      final split = pair.indexOf('=');
+      if (split > 0) {
+        fields[pair.substring(0, split).trim().toLowerCase()] = pair
+            .substring(split + 1)
+            .trim();
+      }
+    }
+    return fromFields(fields);
+  }
+
+  Map<String, dynamic> toJson() => {
+    'upload': upload,
+    'download': download,
+    'total': total,
+    'expire': expire,
+  };
+}
+
 class Subscription {
   const Subscription({
     required this.id,
@@ -27,11 +77,13 @@ class Subscription {
     this.updatedAt,
     this.attemptedAt,
     this.error,
+    this.usage,
   });
   final String id, name, url;
   final int autoHours;
   final DateTime? updatedAt, attemptedAt;
   final String? error;
+  final SubscriptionUsage? usage;
   Map<String, dynamic> toJson() => {
     'id': id,
     'name': name,
@@ -40,6 +92,7 @@ class Subscription {
     'updatedAt': updatedAt?.toIso8601String(),
     'attemptedAt': attemptedAt?.toIso8601String(),
     'error': error,
+    if (usage != null) 'usage': usage!.toJson(),
   };
   factory Subscription.fromJson(Map<String, dynamic> j) => Subscription(
     id: j['id'] as String,
@@ -49,8 +102,15 @@ class Subscription {
     updatedAt: DateTime.tryParse(j['updatedAt'] as String? ?? ''),
     attemptedAt: DateTime.tryParse(j['attemptedAt'] as String? ?? ''),
     error: j['error'] as String?,
+    usage: j['usage'] is Map
+        ? SubscriptionUsage.fromFields(j['usage'] as Map)
+        : null,
   );
-  Subscription result({required DateTime now, String? failure}) => Subscription(
+  Subscription result({
+    required DateTime now,
+    String? failure,
+    SubscriptionUsage? usage,
+  }) => Subscription(
     id: id,
     name: name,
     url: url,
@@ -58,6 +118,7 @@ class Subscription {
     updatedAt: failure == null ? now : updatedAt,
     attemptedAt: now,
     error: failure,
+    usage: failure == null ? usage : this.usage,
   );
   factory Subscription.create(String name, String url, int hours) =>
       Subscription(id: Profile.newId(), name: name, url: url, autoHours: hours);

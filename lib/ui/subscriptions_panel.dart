@@ -1,4 +1,5 @@
 import 'calm_theme.dart';
+import 'format_bytes.dart';
 import 'package:flutter/material.dart';
 import '../controllers/app_controller.dart';
 import '../models/resources.dart';
@@ -125,6 +126,22 @@ class SubscriptionsPanel extends StatelessWidget {
                         fontSize: 12,
                       ),
                     ),
+                    if (s.usage case final usage?)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6),
+                        child: Text(
+                          [
+                            if (usage.upload != null)
+                              '已上传 ${formatBytes(usage.upload!)}',
+                            if (usage.download != null)
+                              '已下载 ${formatBytes(usage.download!)}',
+                            if (usage.total != null && usage.total! > 0)
+                              '总配额 ${formatBytes(usage.total!)}',
+                            if (usage.expire != null)
+                              '到期 ${dateLabel(DateTime.fromMillisecondsSinceEpoch(usage.expire! * 1000))}',
+                          ].join(' · '),
+                        ),
+                      ),
                     if (s.error != null)
                       Padding(
                         padding: const EdgeInsets.only(top: 10),

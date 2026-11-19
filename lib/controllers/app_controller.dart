@@ -166,7 +166,7 @@ class AppController extends ChangeNotifier {
     }, allowConnected: true);
   }
 
-  void _restore(Map<String, dynamic> value) {
+  void _restore(Map<String, dynamic> value, {List<Profile>? retainedProfiles}) {
     final custom = value['customSubscriptionAgent'];
     customSubscriptionAgent =
         custom is String && SubscriptionAgent.validCustom(custom)
@@ -187,9 +187,11 @@ class AppController extends ChangeNotifier {
             .where((mode) => mode.name == value['themeMode'])
             .firstOrNull ??
         ThemeMode.system;
-    profiles = (value['profiles'] as List? ?? [])
-        .map((p) => Profile.fromJson(Map<String, dynamic>.from(p as Map)))
-        .toList();
+    profiles =
+        retainedProfiles ??
+        (value['profiles'] as List? ?? [])
+            .map((p) => Profile.fromJson(Map<String, dynamic>.from(p as Map)))
+            .toList();
     subscriptions = (value['subscriptions'] as List? ?? [])
         .map((s) => Subscription.fromJson(Map<String, dynamic>.from(s as Map)))
         .toList();
@@ -237,15 +239,28 @@ class AppController extends ChangeNotifier {
     'routing': routing.name,
   };
 
+  bool initializing = false;
   Future<void> initialize({bool poll = true}) async {
+    if (initializing || loaded || _disposed) return;
+    initializing = true;
+    final previous = _state();
+    error = null;
+    _notify();
     try {
       final value = await store.read();
+      if (_disposed) return;
       if (value != null) _restore(value);
       loaded = true;
       _log('配置已加载');
-    } on Object {
-      error = '无法读取安全存储，请检查系统钥匙串权限后重启应用。';
+    } on Object catch (e) {
+      if (_disposed) return;
+      _restore(previous);
+      error = e is FormatException || e is TypeError || e is ArgumentError
+          ? '已保存的配置格式无效，原数据已保留。'
+          : '无法读取安全存储，请检查系统钥匙串或存储权限后重试。';
       _log(error!);
+    } finally {
+      initializing = false;
     }
     if (poll && loaded) {
       await refresh();
@@ -268,6 +283,7 @@ class AppController extends ChangeNotifier {
       throw StateError('请先断开连接并等待当前操作完成');
     }
     final before = _state();
+    final previousProfiles = profiles;
     saving = true;
     error = null;
     _notify();
@@ -276,7 +292,7 @@ class AppController extends ChangeNotifier {
       await store.write(_state());
       return result;
     } on Object {
-      _restore(before);
+      _restore(before, retainedProfiles: previousProfiles);
       rethrow;
     } finally {
       saving = false;
@@ -418,6 +434,7 @@ class AppController extends ChangeNotifier {
       updatedAt: current.updatedAt,
       attemptedAt: sameSource ? current.attemptedAt : null,
       error: sameSource ? current.error : null,
+      usage: sameSource ? current.usage : null,
     );
     subscriptions = subscriptions
         .map((s) => s.id == value.id ? updated : s)
@@ -432,10 +449,12 @@ class AppController extends ChangeNotifier {
   Future<bool> updateSubscription(String id) => _change(() async {
     final subscription = subscriptions.firstWhere((s) => s.id == id);
     try {
+      SubscriptionUsage? usage;
       final parsed = ProfileImporter.parse(
         await fetcher.subscription(
           subscription.url,
           userAgent: subscriptionHeader,
+          onUsage: (value) => usage = value,
           proxy: connected ? _activeHttpProxy : null,
           onRoute: _downloadRoute,
         ),
@@ -452,17 +471,30 @@ class AppController extends ChangeNotifier {
       for (final p in parsed) {
         final key = fingerprint(p);
         if (seen.add(key)) {
-          updated.add(p.copy(id: old[key]?.id, subscriptionId: id));
+          final previous = old[key];
+          updated.add(
+            previous != null && previous.name == p.name
+                ? previous
+                : p.copy(id: previous?.id, subscriptionId: id),
+          );
         }
       }
       final selectedWasHere = selected?.subscriptionId == id;
-      profiles = [...profiles.where((p) => p.subscriptionId != id), ...updated];
+      final first = profiles.indexWhere((p) => p.subscriptionId == id);
+      final insertAt = first < 0 ? profiles.length : first;
+      profiles = [
+        ...profiles.take(insertAt),
+        ...updated,
+        ...profiles.skip(insertAt).where((p) => p.subscriptionId != id),
+      ];
       if (selected == null) {
         selectedId =
             (selectedWasHere ? updated.firstOrNull : profiles.firstOrNull)?.id;
       }
       subscriptions = subscriptions
-          .map((s) => s.id == id ? s.result(now: DateTime.now()) : s)
+          .map(
+            (s) => s.id == id ? s.result(now: DateTime.now(), usage: usage) : s,
+          )
           .toList();
       _log('订阅更新成功：${updated.length} 个节点');
       return true;
@@ -678,7 +710,7 @@ class AppController extends ChangeNotifier {
     await _toggleConnection();
   }
 
-  /// A user-initiated live switch is one operation: stop, save, then start.
+  /// A live switch retains the previous session snapshot until the replacement is saved.
   /// Resource refresh and other UI actions see busy for the entire transition.
   Future<void> switchNode(String id) async {
     if (!resourcesEditable) return;
@@ -695,25 +727,7 @@ class AppController extends ChangeNotifier {
       return;
     }
     if (_activeProfile?.id == id && !pendingChanges) return;
-    _switchingNode = true;
-    _notify();
-    try {
-      await _toggleConnection();
-      if (status != VpnStatus.disconnected) return;
-      final previousId = selectedId;
-      selectedId = next.id;
-      try {
-        await store.write(_state());
-      } on Object {
-        selectedId = previousId;
-        error = '节点选择保存失败，连接已断开。';
-        return;
-      }
-      await _toggleConnection();
-    } finally {
-      _switchingNode = false;
-      _notify();
-    }
+    await _switchSession(id, routing, '所选节点');
   }
 
   Future<bool> shutdownForExit() async {
@@ -836,13 +850,15 @@ class AppController extends ChangeNotifier {
               .map((v) => v.split(':')[1]);
           final file = names.firstOrNull;
           if (file == null || file == databases[kind]!.fileName) continue;
-          if (!RegExp('^$kind-[0-9a-f]{64}\\.dat\$').hasMatch(file)) {
-            throw const FormatException('活动规则库文件名无效');
-          }
+          final digest = GeoStore.fileDigest(kind, file);
+          if (digest == null) throw const FormatException('活动规则库文件名无效');
           final info = await backend.call(
             'geo',
             jsonEncode({'kind': kind, 'path': '$assets/$file'}),
           );
+          if (info['sha256'] != digest) {
+            throw FormatException('活动 $kind 文件已损坏，请用修复后的规则库重新连接');
+          }
           databases[kind] = GeoAsset.fromJson({
             ...databases[kind]!.toJson(),
             'fileName': file,
@@ -885,6 +901,15 @@ class AppController extends ChangeNotifier {
       await settings(mode, next);
       return;
     }
+    await _switchSession(selectedId, next, next.label);
+  }
+
+  Future<void> _switchSession(
+    String? nextId,
+    RoutingMode nextRouting,
+    String label,
+  ) async {
+    final previousId = selectedId;
     final previous = routing;
     final oldConfig = _activeConfig!;
     final oldAssets = _activeAssets;
@@ -894,12 +919,14 @@ class AppController extends ChangeNotifier {
     error = null;
     _notify();
     try {
-      routing = next;
+      selectedId = nextId;
+      routing = nextRouting;
       final config = jsonEncode(buildConfig());
       final assets = await _assetDirectory();
       // Resolve the prospective rules before disturbing the active session.
       await _toggleConnection();
       if (status != VpnStatus.disconnected) {
+        selectedId = previousId;
         routing = previous;
         return;
       }
@@ -908,8 +935,9 @@ class AppController extends ChangeNotifier {
       _notify();
       await _startSession(config, assets, selected);
       await store.write(_state());
-      _log('路由模式已切换为${next.label}');
+      _log('已切换到$label');
     } on Object catch (e) {
+      selectedId = previousId;
       routing = previous;
       if (stopped) {
         try {
@@ -920,7 +948,7 @@ class AppController extends ChangeNotifier {
           return;
         }
       }
-      error = '未能切换到${next.label}：$e';
+      error = '未能切换到$label：$e';
     } finally {
       _switchingNode = false;
       _notify();

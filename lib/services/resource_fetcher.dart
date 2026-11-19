@@ -29,6 +29,7 @@ class ResourceFetcher {
   Stream<List<int>> download(
     String source, {
     required int limit,
+    void Function(HttpHeaders)? onHeaders,
     String userAgent = _resourceAgent,
     Uri? proxy,
   }) async* {
@@ -83,6 +84,7 @@ class ResourceFetcher {
           yield chunk;
         }
         if (count == 0) throw const FormatException('服务器返回了空文件');
+        onHeaders?.call(response.headers);
         return;
       }
     } on TimeoutException {
@@ -103,6 +105,7 @@ class ResourceFetcher {
   Future<T> fetch<T>(
     String source, {
     required int limit,
+    void Function(HttpHeaders)? onHeaders,
     String userAgent = _resourceAgent,
     Uri? proxy,
     void Function(DownloadRoute)? onRoute,
@@ -112,24 +115,41 @@ class ResourceFetcher {
       onRoute?.call(DownloadRoute.proxy);
       try {
         return await consume(
-          download(source, limit: limit, proxy: proxy, userAgent: userAgent),
+          download(
+            source,
+            limit: limit,
+            proxy: proxy,
+            userAgent: userAgent,
+            onHeaders: onHeaders,
+          ),
         );
       } on Object {
         /* Retry the complete download over the system network. */
       }
     }
     onRoute?.call(DownloadRoute.system);
-    return consume(download(source, limit: limit, userAgent: userAgent));
+    return consume(
+      download(
+        source,
+        limit: limit,
+        userAgent: userAgent,
+        onHeaders: onHeaders,
+      ),
+    );
   }
 
   Future<String> subscription(
     String url, {
+    void Function(SubscriptionUsage?)? onUsage,
     String userAgent = SubscriptionAgent.xrayHeader,
     Uri? proxy,
     void Function(DownloadRoute)? onRoute,
   }) => fetch(
     url,
     limit: 1024 * 1024,
+    onHeaders: (headers) => onUsage?.call(
+      SubscriptionUsage.parse(headers['subscription-userinfo']?.join(';')),
+    ),
     userAgent: userAgent,
     proxy: proxy,
     onRoute: onRoute,

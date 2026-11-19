@@ -7,6 +7,54 @@ import 'package:fcxray/ui/help_fields.dart';
 import 'test_support.dart';
 
 void main() {
+  testWidgets('subscriptions show provider usage and omit missing fields', (
+    t,
+  ) async {
+    final store = MemoryStore()
+      ..value = {
+        'subscriptions': [
+          {
+            'id': 'sub',
+            'name': 'Provider',
+            'url': 'https://example.com/sub',
+            'usage': {'download': 2048, 'total': 8192, 'expire': 1893456000},
+          },
+        ],
+      };
+    final c = AppController(
+      backend: FakeBackend(),
+      store: store,
+      platform: 'android',
+    );
+    await c.initialize(poll: false);
+    await t.pumpWidget(FcxrayApp(controller: c));
+    await t.tap(find.text('订阅'));
+    await t.pumpAndSettle();
+    expect(find.textContaining('已下载 2.0 KB · 总配额 8.0 KB · 到期'), findsOneWidget);
+    expect(find.textContaining('已上传'), findsNothing);
+  });
+  testWidgets('node list switches a live session and shows the active node', (
+    t,
+  ) async {
+    final c = AppController(
+      backend: FakeBackend(),
+      store: MemoryStore(),
+      platform: 'android',
+    );
+    await c.initialize(poll: false);
+    await c.importText(
+      'trojan://p@one.example:443#First\ntrojan://p@two.example:443#Second',
+    );
+    await c.toggle();
+    await t.pumpWidget(FcxrayApp(controller: c));
+    await t.tap(find.text('节点'));
+    await t.pumpAndSettle();
+    await t.ensureVisible(find.text('Second'));
+    await t.tap(find.text('Second'));
+    await t.pumpAndSettle();
+    expect(c.activeProfile!.name, 'Second');
+    expect(c.connected, true);
+  });
   testWidgets('parameter help opens by touch and mouse hover', (tester) async {
     await tester.pumpWidget(
       const MaterialApp(
