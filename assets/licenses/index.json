@@ -1,0 +1,466 @@
+[
+  {
+    "name": "github.com/follow-xray/fcxray/native",
+    "asset": "assets/licenses/github.com_follow-xray_fcxray_native.txt"
+  },
+  {
+    "name": "cel.dev/expr",
+    "asset": "assets/licenses/cel.dev_expr.txt"
+  },
+  {
+    "name": "cloud.google.com/go/compute/metadata",
+    "asset": "assets/licenses/cloud.google.com_go_compute_metadata.txt"
+  },
+  {
+    "name": "github.com/BurntSushi/toml",
+    "asset": "assets/licenses/github.com_BurntSushi_toml.txt"
+  },
+  {
+    "name": "github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp",
+    "asset": "assets/licenses/github.com_GoogleCloudPlatform_opentelemetry-operations-go_detectors_gcp.txt"
+  },
+  {
+    "name": "github.com/andybalholm/brotli",
+    "asset": "assets/licenses/github.com_andybalholm_brotli.txt"
+  },
+  {
+    "name": "github.com/apernet/quic-go",
+    "asset": "assets/licenses/github.com_apernet_quic-go.txt"
+  },
+  {
+    "name": "github.com/bufbuild/protocompile",
+    "asset": "assets/licenses/github.com_bufbuild_protocompile.txt"
+  },
+  {
+    "name": "github.com/cespare/xxhash/v2",
+    "asset": "assets/licenses/github.com_cespare_xxhash_v2.txt"
+  },
+  {
+    "name": "github.com/chzyer/readline",
+    "asset": "assets/licenses/github.com_chzyer_readline.txt"
+  },
+  {
+    "name": "github.com/chzyer/test",
+    "asset": "assets/licenses/github.com_chzyer_test.txt"
+  },
+  {
+    "name": "github.com/cncf/xds/go",
+    "asset": "assets/licenses/github.com_cncf_xds_go.txt"
+  },
+  {
+    "name": "github.com/creack/pty",
+    "asset": "assets/licenses/github.com_creack_pty.txt"
+  },
+  {
+    "name": "github.com/davecgh/go-spew",
+    "asset": "assets/licenses/github.com_davecgh_go-spew.txt"
+  },
+  {
+    "name": "github.com/dvyukov/go-fuzz",
+    "asset": "assets/licenses/github.com_dvyukov_go-fuzz.txt"
+  },
+  {
+    "name": "github.com/envoyproxy/go-control-plane",
+    "asset": "assets/licenses/github.com_envoyproxy_go-control-plane.txt"
+  },
+  {
+    "name": "github.com/envoyproxy/go-control-plane/envoy",
+    "asset": "assets/licenses/github.com_envoyproxy_go-control-plane_envoy.txt"
+  },
+  {
+    "name": "github.com/envoyproxy/go-control-plane/ratelimit",
+    "asset": "assets/licenses/github.com_envoyproxy_go-control-plane_ratelimit.txt"
+  },
+  {
+    "name": "github.com/envoyproxy/protoc-gen-validate",
+    "asset": "assets/licenses/github.com_envoyproxy_protoc-gen-validate.txt"
+  },
+  {
+    "name": "github.com/ghodss/yaml",
+    "asset": "assets/licenses/github.com_ghodss_yaml.txt"
+  },
+  {
+    "name": "github.com/go-jose/go-jose/v4",
+    "asset": "assets/licenses/github.com_go-jose_go-jose_v4.txt"
+  },
+  {
+    "name": "github.com/go-logr/logr",
+    "asset": "assets/licenses/github.com_go-logr_logr.txt"
+  },
+  {
+    "name": "github.com/go-logr/stdr",
+    "asset": "assets/licenses/github.com_go-logr_stdr.txt"
+  },
+  {
+    "name": "github.com/golang/glog",
+    "asset": "assets/licenses/github.com_golang_glog.txt"
+  },
+  {
+    "name": "github.com/golang/mock",
+    "asset": "assets/licenses/github.com_golang_mock.txt"
+  },
+  {
+    "name": "github.com/golang/protobuf",
+    "asset": "assets/licenses/github.com_golang_protobuf.txt"
+  },
+  {
+    "name": "github.com/google/btree",
+    "asset": "assets/licenses/github.com_google_btree.txt"
+  },
+  {
+    "name": "github.com/google/go-cmp",
+    "asset": "assets/licenses/github.com_google_go-cmp.txt"
+  },
+  {
+    "name": "github.com/google/gopacket",
+    "asset": "assets/licenses/github.com_google_gopacket.txt"
+  },
+  {
+    "name": "github.com/google/uuid",
+    "asset": "assets/licenses/github.com_google_uuid.txt"
+  },
+  {
+    "name": "github.com/gorilla/websocket",
+    "asset": "assets/licenses/github.com_gorilla_websocket.txt"
+  },
+  {
+    "name": "github.com/huin/goupnp",
+    "asset": "assets/licenses/github.com_huin_goupnp.txt"
+  },
+  {
+    "name": "github.com/jackpal/go-nat-pmp",
+    "asset": "assets/licenses/github.com_jackpal_go-nat-pmp.txt"
+  },
+  {
+    "name": "github.com/jordanlewis/gcassert",
+    "asset": "assets/licenses/github.com_jordanlewis_gcassert.txt"
+  },
+  {
+    "name": "github.com/juju/ratelimit",
+    "asset": "assets/licenses/github.com_juju_ratelimit.txt"
+  },
+  {
+    "name": "github.com/klauspost/compress",
+    "asset": "assets/licenses/github.com_klauspost_compress.txt"
+  },
+  {
+    "name": "github.com/klauspost/cpuid/v2",
+    "asset": "assets/licenses/github.com_klauspost_cpuid_v2.txt"
+  },
+  {
+    "name": "github.com/koron/go-ssdp",
+    "asset": "assets/licenses/github.com_koron_go-ssdp.txt"
+  },
+  {
+    "name": "github.com/kr/pretty",
+    "asset": "assets/licenses/github.com_kr_pretty.txt"
+  },
+  {
+    "name": "github.com/kr/text",
+    "asset": "assets/licenses/github.com_kr_text.txt"
+  },
+  {
+    "name": "github.com/libp2p/go-nat",
+    "asset": "assets/licenses/github.com_libp2p_go-nat.txt"
+  },
+  {
+    "name": "github.com/libp2p/go-netroute",
+    "asset": "assets/licenses/github.com_libp2p_go-netroute.txt"
+  },
+  {
+    "name": "github.com/lxn/walk",
+    "asset": "assets/licenses/github.com_lxn_walk.txt"
+  },
+  {
+    "name": "github.com/lxn/win",
+    "asset": "assets/licenses/github.com_lxn_win.txt"
+  },
+  {
+    "name": "github.com/miekg/dns",
+    "asset": "assets/licenses/github.com_miekg_dns.txt"
+  },
+  {
+    "name": "github.com/molecule-man/go-brrr",
+    "asset": "assets/licenses/github.com_molecule-man_go-brrr.txt"
+  },
+  {
+    "name": "github.com/pelletier/go-toml",
+    "asset": "assets/licenses/github.com_pelletier_go-toml.txt"
+  },
+  {
+    "name": "github.com/pion/dtls/v3",
+    "asset": "assets/licenses/github.com_pion_dtls_v3.txt"
+  },
+  {
+    "name": "github.com/pion/logging",
+    "asset": "assets/licenses/github.com_pion_logging.txt"
+  },
+  {
+    "name": "github.com/pion/stun/v3",
+    "asset": "assets/licenses/github.com_pion_stun_v3.txt"
+  },
+  {
+    "name": "github.com/pion/transport/v4",
+    "asset": "assets/licenses/github.com_pion_transport_v4.txt"
+  },
+  {
+    "name": "github.com/pires/go-proxyproto",
+    "asset": "assets/licenses/github.com_pires_go-proxyproto.txt"
+  },
+  {
+    "name": "github.com/pkg/diff",
+    "asset": "assets/licenses/github.com_pkg_diff.txt"
+  },
+  {
+    "name": "github.com/planetscale/vtprotobuf",
+    "asset": "assets/licenses/github.com_planetscale_vtprotobuf.txt"
+  },
+  {
+    "name": "github.com/pmezard/go-difflib",
+    "asset": "assets/licenses/github.com_pmezard_go-difflib.txt"
+  },
+  {
+    "name": "github.com/quic-go/go-ossfuzz-seeds",
+    "asset": "assets/licenses/github.com_quic-go_go-ossfuzz-seeds.txt"
+  },
+  {
+    "name": "github.com/quic-go/qpack",
+    "asset": "assets/licenses/github.com_quic-go_qpack.txt"
+  },
+  {
+    "name": "github.com/refraction-networking/utls",
+    "asset": "assets/licenses/github.com_refraction-networking_utls.txt"
+  },
+  {
+    "name": "github.com/robfig/cron/v3",
+    "asset": "assets/licenses/github.com_robfig_cron_v3.txt"
+  },
+  {
+    "name": "github.com/rogpeppe/go-internal",
+    "asset": "assets/licenses/github.com_rogpeppe_go-internal.txt"
+  },
+  {
+    "name": "github.com/spiffe/go-spiffe/v2",
+    "asset": "assets/licenses/github.com_spiffe_go-spiffe_v2.txt"
+  },
+  {
+    "name": "github.com/stretchr/testify",
+    "asset": "assets/licenses/github.com_stretchr_testify.txt"
+  },
+  {
+    "name": "github.com/vishvananda/netlink",
+    "asset": "assets/licenses/github.com_vishvananda_netlink.txt"
+  },
+  {
+    "name": "github.com/vishvananda/netns",
+    "asset": "assets/licenses/github.com_vishvananda_netns.txt"
+  },
+  {
+    "name": "github.com/wlynxg/anet",
+    "asset": "assets/licenses/github.com_wlynxg_anet.txt"
+  },
+  {
+    "name": "github.com/xtls/reality",
+    "asset": "assets/licenses/github.com_xtls_reality.txt"
+  },
+  {
+    "name": "github.com/xtls/xray-core",
+    "asset": "assets/licenses/github.com_xtls_xray-core.txt"
+  },
+  {
+    "name": "github.com/yuin/gopher-lua",
+    "asset": "assets/licenses/github.com_yuin_gopher-lua.txt"
+  },
+  {
+    "name": "go.opentelemetry.io/auto/sdk",
+    "asset": "assets/licenses/go.opentelemetry.io_auto_sdk.txt"
+  },
+  {
+    "name": "go.opentelemetry.io/contrib/detectors/gcp",
+    "asset": "assets/licenses/go.opentelemetry.io_contrib_detectors_gcp.txt"
+  },
+  {
+    "name": "go.opentelemetry.io/otel",
+    "asset": "assets/licenses/go.opentelemetry.io_otel.txt"
+  },
+  {
+    "name": "go.opentelemetry.io/otel/metric",
+    "asset": "assets/licenses/go.opentelemetry.io_otel_metric.txt"
+  },
+  {
+    "name": "go.opentelemetry.io/otel/sdk",
+    "asset": "assets/licenses/go.opentelemetry.io_otel_sdk.txt"
+  },
+  {
+    "name": "go.opentelemetry.io/otel/sdk/metric",
+    "asset": "assets/licenses/go.opentelemetry.io_otel_sdk_metric.txt"
+  },
+  {
+    "name": "go.opentelemetry.io/otel/trace",
+    "asset": "assets/licenses/go.opentelemetry.io_otel_trace.txt"
+  },
+  {
+    "name": "go.uber.org/mock",
+    "asset": "assets/licenses/go.uber.org_mock.txt"
+  },
+  {
+    "name": "go.yaml.in/yaml/v3",
+    "asset": "assets/licenses/go.yaml.in_yaml_v3.txt"
+  },
+  {
+    "name": "go4.org/netipx",
+    "asset": "assets/licenses/go4.org_netipx.txt"
+  },
+  {
+    "name": "golang.org/x/crypto",
+    "asset": "assets/licenses/golang.org_x_crypto.txt"
+  },
+  {
+    "name": "golang.org/x/crypto/x509roots/fallback",
+    "asset": "assets/licenses/golang.org_x_crypto_x509roots_fallback.txt"
+  },
+  {
+    "name": "golang.org/x/exp",
+    "asset": "assets/licenses/golang.org_x_exp.txt"
+  },
+  {
+    "name": "golang.org/x/exp/shiny",
+    "asset": "assets/licenses/golang.org_x_exp_shiny.txt"
+  },
+  {
+    "name": "golang.org/x/exp/typeparams",
+    "asset": "assets/licenses/golang.org_x_exp_typeparams.txt"
+  },
+  {
+    "name": "golang.org/x/image",
+    "asset": "assets/licenses/golang.org_x_image.txt"
+  },
+  {
+    "name": "golang.org/x/lint",
+    "asset": "assets/licenses/golang.org_x_lint.txt"
+  },
+  {
+    "name": "golang.org/x/mobile",
+    "asset": "assets/licenses/golang.org_x_mobile.txt"
+  },
+  {
+    "name": "golang.org/x/mod",
+    "asset": "assets/licenses/golang.org_x_mod.txt"
+  },
+  {
+    "name": "golang.org/x/net",
+    "asset": "assets/licenses/golang.org_x_net.txt"
+  },
+  {
+    "name": "golang.org/x/oauth2",
+    "asset": "assets/licenses/golang.org_x_oauth2.txt"
+  },
+  {
+    "name": "golang.org/x/sync",
+    "asset": "assets/licenses/golang.org_x_sync.txt"
+  },
+  {
+    "name": "golang.org/x/sys",
+    "asset": "assets/licenses/golang.org_x_sys.txt"
+  },
+  {
+    "name": "golang.org/x/term",
+    "asset": "assets/licenses/golang.org_x_term.txt"
+  },
+  {
+    "name": "golang.org/x/text",
+    "asset": "assets/licenses/golang.org_x_text.txt"
+  },
+  {
+    "name": "golang.org/x/time",
+    "asset": "assets/licenses/golang.org_x_time.txt"
+  },
+  {
+    "name": "golang.org/x/tools",
+    "asset": "assets/licenses/golang.org_x_tools.txt"
+  },
+  {
+    "name": "golang.org/x/tools/go/expect",
+    "asset": "assets/licenses/golang.org_x_tools_go_expect.txt"
+  },
+  {
+    "name": "golang.org/x/tools/go/packages/packagestest",
+    "asset": "assets/licenses/golang.org_x_tools_go_packages_packagestest.txt"
+  },
+  {
+    "name": "golang.org/x/xerrors",
+    "asset": "assets/licenses/golang.org_x_xerrors.txt"
+  },
+  {
+    "name": "golang.zx2c4.com/wintun",
+    "asset": "assets/licenses/golang.zx2c4.com_wintun.txt"
+  },
+  {
+    "name": "golang.zx2c4.com/wireguard",
+    "asset": "assets/licenses/golang.zx2c4.com_wireguard.txt"
+  },
+  {
+    "name": "golang.zx2c4.com/wireguard/windows",
+    "asset": "assets/licenses/golang.zx2c4.com_wireguard_windows.txt"
+  },
+  {
+    "name": "gonum.org/v1/gonum",
+    "asset": "assets/licenses/gonum.org_v1_gonum.txt"
+  },
+  {
+    "name": "google.golang.org/genproto/googleapis/api",
+    "asset": "assets/licenses/google.golang.org_genproto_googleapis_api.txt"
+  },
+  {
+    "name": "google.golang.org/genproto/googleapis/rpc",
+    "asset": "assets/licenses/google.golang.org_genproto_googleapis_rpc.txt"
+  },
+  {
+    "name": "google.golang.org/grpc",
+    "asset": "assets/licenses/google.golang.org_grpc.txt"
+  },
+  {
+    "name": "google.golang.org/grpc/cmd/protoc-gen-go-grpc",
+    "asset": "assets/licenses/google.golang.org_grpc_cmd_protoc-gen-go-grpc.txt"
+  },
+  {
+    "name": "google.golang.org/protobuf",
+    "asset": "assets/licenses/google.golang.org_protobuf.txt"
+  },
+  {
+    "name": "gopkg.in/check.v1",
+    "asset": "assets/licenses/gopkg.in_check.v1.txt"
+  },
+  {
+    "name": "gopkg.in/yaml.v2",
+    "asset": "assets/licenses/gopkg.in_yaml.v2.txt"
+  },
+  {
+    "name": "gopkg.in/yaml.v3",
+    "asset": "assets/licenses/gopkg.in_yaml.v3.txt"
+  },
+  {
+    "name": "gvisor.dev/gvisor",
+    "asset": "assets/licenses/gvisor.dev_gvisor.txt"
+  },
+  {
+    "name": "h12.io/socks",
+    "asset": "assets/licenses/h12.io_socks.txt"
+  },
+  {
+    "name": "honnef.co/go/tools",
+    "asset": "assets/licenses/honnef.co_go_tools.txt"
+  },
+  {
+    "name": "layeh.com/gopher-luar",
+    "asset": "assets/licenses/layeh.com_gopher-luar.txt"
+  },
+  {
+    "name": "lukechampine.com/blake3",
+    "asset": "assets/licenses/lukechampine.com_blake3.txt"
+  },
+  {
+    "name": "mvdan.cc/gofumpt",
+    "asset": "assets/licenses/mvdan.cc_gofumpt.txt"
+  }
+]

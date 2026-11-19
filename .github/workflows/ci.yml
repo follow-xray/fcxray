@@ -1,0 +1,81 @@
+name: Build and test
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache-dependency-path: native/go.sum
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: python3 tool/build.py check
+      - run: python3 tool/smoke.py
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: macos
+            artifact: build/macos/Build/Products/Release/*.app
+          - os: windows-latest
+            target: windows
+            artifact: build/windows/x64/runner/Release/
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache-dependency-path: native/go.sum
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: python tool/build.py ${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fcxray-${{ matrix.target }}-development
+          path: ${{ matrix.artifact }}
+  android:
+    if: github.ref_type != 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache-dependency-path: native/go.sum
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - uses: android-actions/setup-android@v3
+      - run: sdkmanager 'ndk;28.2.13676358' 'platforms;android-36' 'build-tools;36.0.0'
+      - run: flutter pub get
+      - run: python3 tool/build.py apk
+        env:
+          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/28.2.13676358
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fcxray-android-debug
+          path: build/app/outputs/flutter-apk/fcxray-debug.apk

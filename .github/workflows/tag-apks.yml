@@ -1,0 +1,127 @@
+name: Android tag APKs
+on:
+  push:
+    tags: ['**']
+
+permissions:
+  contents: read
+
+jobs:
+  apk:
+    if: github.event.deleted == false
+    name: Build ${{ matrix.abi }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        abi: [arm64-v8a, armeabi-v7a]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.27.1'
+          cache-dependency-path: native/go.sum
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - uses: android-actions/setup-android@v3
+      - name: Install Android toolchain
+        run: |
+          sdkmanager 'ndk;28.2.13676358' 'platforms;android-36' 'build-tools;36.0.0'
+          echo "ANDROID_NDK_HOME=$ANDROID_HOME/ndk/28.2.13676358" >> "$GITHUB_ENV"
+      - run: flutter pub get
+      - name: Prepare signing key
+        shell: bash
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          if [[ -z "$KEYSTORE_BASE64$STORE_PASSWORD$KEY_ALIAS$KEY_PASSWORD" ]]; then
+            echo "::notice::No release signing secrets configured. Using runner debug signing."
+            exit 0
+          fi
+          : "${KEYSTORE_BASE64:?Missing ANDROID_KEYSTORE_BASE64}" "${STORE_PASSWORD:?Missing ANDROID_KEYSTORE_PASSWORD}"
+          : "${KEY_ALIAS:?Missing ANDROID_KEY_ALIAS}" "${KEY_PASSWORD:?Missing ANDROID_KEY_PASSWORD}"
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/fcxray-signing.jks"
+          echo "FCXRAY_KEYSTORE_PATH=$RUNNER_TEMP/fcxray-signing.jks" >> "$GITHUB_ENV"
+      - name: Build and verify APK
+        id: build
+        env:
+          ABI: ${{ matrix.abi }}
+          FCXRAY_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          FCXRAY_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          FCXRAY_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: python3 tool/build.py tag-apk --tag="$GITHUB_REF_NAME" --abi="$ABI"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.build.outputs.artifact }}
+          path: ${{ steps.build.outputs.apk }}
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+      - name: Remove temporary signing key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/fcxray-signing.jks"
+
+  release:
+    name: Publish APKs to GitHub Release
+    needs: apk
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: android-release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fcxray-*-android-*
+          path: release-apks
+          merge-multiple: true
+      - name: Publish both APKs
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          arm64=(release-apks/fcxray-*-android-arm64-v8a.apk)
+          armv7=(release-apks/fcxray-*-android-armeabi-v7a.apk)
+          if (( ${#arm64[@]} != 1 || ${#armv7[@]} != 1 )); then
+            echo "::error::Expected exactly one APK for each Android ABI"
+            exit 1
+          fi
+          [[ -s "${arm64[0]}" && -s "${armv7[0]}" ]]
+          [[ "${arm64[0]%-arm64-v8a.apk}" == "${armv7[0]%-armeabi-v7a.apk}" ]]
+
+          if ! metadata=$(gh release view --json isDraft,assets -- "$TAG"); then
+            flags=(--draft --verify-tag --generate-notes --title "fcxray $TAG")
+            if [[ $TAG =~ ^v?[0-9]+\.[0-9]+\.[0-9]+- ]]; then
+              flags+=(--prerelease)
+            fi
+            gh release create "${flags[@]}" -- "$TAG"
+            metadata='{"isDraft":true,"assets":[]}'
+          fi
+
+          if [[ $(jq -r '.isDraft' <<< "$metadata") == true ]]; then
+            gh release upload --clobber -- "$TAG" "${arm64[0]}" "${armv7[0]}"
+            gh release edit --draft=false -- "$TAG"
+          else
+            # Reruns preserve APKs users may already have downloaded.
+            for apk in "${arm64[0]}" "${armv7[0]}"; do
+              if ! jq -e --arg name "${apk##*/}" 'any(.assets[]; .name == $name and .state == "uploaded" and .size > 0)' <<< "$metadata" >/dev/null; then
+                gh release upload --clobber -- "$TAG" "$apk"
+              fi
+            done
+          fi

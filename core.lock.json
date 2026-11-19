@@ -1,0 +1,6 @@
+{
+  "repository": "https://github.com/XTLS/Xray-core.git",
+  "commit": "82b5b76bc510d0f2d5afd04485d71f9e125de19d",
+  "go": "1.27",
+  "license": "MPL-2.0"
+}
