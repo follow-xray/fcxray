@@ -4,7 +4,13 @@
 
 项目目录、Dart 包名和应用显示名称均为 `fcxray`。Android applicationId / namespace、macOS Bundle ID 和 Windows AppUserModelID 统一使用 `com.fcxray.client`。桌面产物为 `fcxray.app` / `fcxray.exe`。
 
-[桌面界面预览](docs/previews/desktop.png) · [手机界面预览](docs/previews/mobile.png) · [深色主题预览](docs/previews/desktop-dark.png)
+## 界面预览
+
+![fcxray 桌面界面](docs/previews/desktop.png)
+
+![fcxray 手机界面](docs/previews/mobile.png)
+
+![fcxray 桌面深色主题](docs/previews/desktop-dark.png)
 
 ## 功能
 
