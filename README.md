@@ -82,18 +82,26 @@ APK：`build/app/outputs/flutter-apk/fcxray-debug.apk`（构建脚本从 Flutter
 
 Android 内核构建使用固定版本的官方 `golang.org/x/mobile`；当前上游 Android 网络依赖使用 Go 内部符号，所以链接包含 `-checklinkname=0`。不支持旧式 VMess alterId、SIP003 外部插件或 Android always-on 自动恢复。
 
-### 推送 tag 发布分架构 APK
+## GitHub Release 自动发布
 
-将 tag 推送到 GitHub 后，**Android tag APKs** 工作流会并行构建 ARM64 和 ARMv7 的 Release APK。每个任务从固定的 Xray-core 提交编译对应的原生库，并检查最终 APK 只含目标 ABI，以及 Xray、Flutter 引擎、Dart AOT 库的 ELF 架构。
+推送新 tag 后，**Release builds** 工作流并行构建以下四个附件。以 `v0.1.0` 为例：
 
-两个构建任务都成功后，工作流会创建对应 tag 的 GitHub Release。用户在 **Releases → 对应版本 → Assets** 中即可直接下载适合设备的 APK。以 `v0.7.1` 为例：
+| 附件 | 适用平台 |
+| --- | --- |
+| `fcxray-0.1.0-android-arm64-v8a.apk` | Android 64 位 ARM |
+| `fcxray-0.1.0-android-armeabi-v7a.apk` | Android 32 位 ARMv7 |
+| `fcxray-0.1.0-windows-x64.zip` | Windows x64，完整解压后运行 `fcxray.exe` |
+| `fcxray-0.1.0-macos-arm64.zip` | Apple 芯片 Mac，解压后得到 `fcxray.app`。当前使用 ad-hoc 签名，尚未经过 Apple 公证 |
 
-- `fcxray-0.7.1-android-arm64-v8a.apk`（64 位 ARM）
-- `fcxray-0.7.1-android-armeabi-v7a.apk`（32 位 ARMv7）
+各平台都从 tag 的源码及其锁定的 Xray-core 提交构建。Android 任务校验 APK 中三个原生库的 ELF 架构。Windows ZIP 包含 Flutter 运行库、应用数据、Xray 内核和 Wintun。macOS 在 runner 上校验应用签名及主程序和内核的架构，再用 `ditto` 打包以保留执行权限和框架符号链接。
 
-版本 tag 可使用 `v1.2.3` 或 `v1.2.3-beta.1`，版本号同步为 Android 的 versionName。其他 tag 也会触发构建，APK 保留 pubspec 中的应用版本。发布新版本时递增 pubspec.yaml 中的构建号，以支持 Android 升级。新 Release 会在两个 APK 都上传成功后发布。形如 `v1.2.3-beta.1` 的 tag 会标记为预发布。重跑时复用相同 tag 的 Release，对已发布版本只补齐缺失或未成功上传的 APK。
+四项构建全部成功后，工作流将附件上传到对应 tag 的草稿 Release，再公开发布。对已公开且允许追加附件的 Release，重跑只补齐缺失或上传失败的附件。因此，已有两个 APK 的版本可以用同一工作流补发桌面 ZIP。
 
-已推送的 tag 若因 CI 环境配置失败，可在修复合入默认分支后，打开 **Actions → Android tag APKs → Run workflow**，选择默认分支，在 `tag` 中填入原标签（例如 `v0.1.0`）。工作流使用当前的构建环境配置，检出指定 tag 的源码并发布到该 tag。直接在旧运行中选择 Re-run 会继续使用旧工作流。
+**手动发布已有 tag**：打开 **Actions → Release builds → Run workflow**，分支选 `main`，在 `tag` 中输入已有标签，例如 `v0.1.0`。工作流使用所选分支的发布步骤，检出该标签的源码。旧运行的 **Re-run** 会沿用原工作流。
+
+版本 tag 可使用 `v1.2.3` 或 `v1.2.3-beta.1`，版本号同步为 Android 的 versionName，带预发布后缀的版本会标为预发布。其他 tag 也会触发构建，APK 保留 pubspec 中的应用版本。发布新版本时递增 pubspec.yaml 中的构建号，以支持 Android 升级。
+
+### Android 签名与本地构建
 
 正式分发时，在仓库 **Settings → Secrets and variables → Actions** 配置以下四项 repository secrets，使不同 tag 和架构使用同一签名证书：
 
@@ -246,7 +254,7 @@ python3 tool/smoke.py
 - Go：真实 SOCKS 数据转发、加密 VLESS + Mux + xdrive local 端到端转发、统计与资源回收；Geo 数据校验、原生分类路由与活动快照，支持 `go test -race ./...`。
 - Smoke：Dart 实际生成三平台配置，经 Go 校验；本机 Xray 客户端 → VLESS 服务端 → HTTP 目标的真实往返、计数、重连与父进程 EOF 清理。测试不改变系统网络路由。
 - 可选联网测试：`python3 tool/geo_smoke.py` 下载默认规则源并检查摘要、真实 protobuf 与原生路由加载，仅写入被忽略的 `build/geo-smoke`，不启动 VPN。
-- CI：静态检查、测试、macOS / Windows / Android 构建；推送 tag 时自动发布对应的 Android Release。
+- CI：静态检查、测试、macOS / Windows / Android 构建；推送 tag 时自动发布包含两个 APK 和两个桌面 ZIP 的 GitHub Release。
 
 目标机器的 VPN 授权、TUN 路由恢复、DNS/IPv6 泄漏、Wi-Fi/蜂窝切换、睡眠恢复和远端节点连通性仍需单独验证；模拟内核状态或本地代理测试不能替代这些测试。
 

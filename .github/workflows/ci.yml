@@ -23,6 +23,7 @@ jobs:
       - run: python3 tool/build.py check
       - run: python3 tool/smoke.py
   desktop:
+    if: github.ref_type != 'tag'
     strategy:
       fail-fast: false
       matrix:

@@ -1,4 +1,4 @@
-name: Android tag APKs
+name: Release builds
 on:
   push:
     tags: ['**']
@@ -102,9 +102,70 @@ jobs:
         if: always()
         run: rm -f "$RUNNER_TEMP/fcxray-signing.jks"
 
+  desktop:
+    if: github.event_name == 'workflow_dispatch' || github.event.deleted == false
+    name: Package ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: windows-x64
+          - os: macos-15
+            target: macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag && format('refs/tags/{0}', inputs.tag) || github.sha }}
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27.1'
+          cache-dependency-path: native/go.sum
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.44.0'
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      # Older tags rely on Python to locate flutter.bat, which fails on Windows.
+      # Run the tag's native build steps and invoke Flutter from PowerShell.
+      - name: Build and archive Windows portable bundle
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          python tool/build.py core --goos windows --arch amd64
+          python tool/build.py wintun --arch amd64
+          flutter build windows --release
+          $bundle = Resolve-Path 'build/windows/x64/runner/Release'
+          foreach ($file in 'fcxray.exe','fcxray-core.exe','flutter_windows.dll','wintun.dll','data/app.so','data/icudtl.dat','WINTUN-LICENSE.txt') {
+            if (!(Test-Path (Join-Path $bundle $file) -PathType Leaf)) { throw "Missing $file" }
+          }
+          [IO.Compression.ZipFile]::CreateFromDirectory($bundle.Path, (Join-Path $PWD 'windows-x64.zip'))
+      - name: Build and archive macOS app
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          python3 tool/build.py macos --arch arm64
+          app=build/macos/Build/Products/Release/fcxray.app
+          for binary in fcxray fcxray-core; do
+            test -x "$app/Contents/MacOS/$binary"
+            lipo "$app/Contents/MacOS/$binary" -verify_arch arm64
+          done
+          codesign --verify --strict --deep "$app"
+          ditto -c -k --sequesterRsrc --keepParent "$app" macos-arm64.zip
+      - uses: actions/upload-artifact@v6
+        with:
+          name: fcxray-${{ matrix.target }}
+          path: ${{ matrix.target }}.zip
+          if-no-files-found: error
+          compression-level: 0
+          overwrite: true
+
   release:
-    name: Publish APKs to GitHub Release
-    needs: apk
+    name: Publish APKs and desktop ZIPs
+    needs: [apk, desktop]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -114,10 +175,10 @@ jobs:
     steps:
       - uses: actions/download-artifact@v7
         with:
-          pattern: fcxray-*-android-*
-          path: release-apks
+          pattern: fcxray-*
+          path: release-assets
           merge-multiple: true
-      - name: Publish both APKs
+      - name: Publish all four assets
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -126,14 +187,22 @@ jobs:
         run: |
           set -euo pipefail
           shopt -s nullglob
-          arm64=(release-apks/fcxray-*-android-arm64-v8a.apk)
-          armv7=(release-apks/fcxray-*-android-armeabi-v7a.apk)
+          arm64=(release-assets/fcxray-*-android-arm64-v8a.apk)
+          armv7=(release-assets/fcxray-*-android-armeabi-v7a.apk)
           if (( ${#arm64[@]} != 1 || ${#armv7[@]} != 1 )); then
             echo "::error::Expected exactly one APK for each Android ABI"
             exit 1
           fi
           [[ -s "${arm64[0]}" && -s "${armv7[0]}" ]]
           [[ "${arm64[0]%-arm64-v8a.apk}" == "${armv7[0]%-armeabi-v7a.apk}" ]]
+
+          prefix=${arm64[0]%-android-arm64-v8a.apk}
+          assets=("${arm64[0]}" "${armv7[0]}")
+          for platform in windows-x64 macos-arm64; do
+            test -s "release-assets/$platform.zip"
+            mv "release-assets/$platform.zip" "$prefix-$platform.zip"
+            assets+=("$prefix-$platform.zip")
+          done
 
           if ! metadata=$(gh release view --json isDraft,assets -- "$TAG"); then
             flags=(--draft --verify-tag --generate-notes --title "fcxray $TAG")
@@ -145,13 +214,13 @@ jobs:
           fi
 
           if [[ $(jq -r '.isDraft' <<< "$metadata") == true ]]; then
-            gh release upload --clobber -- "$TAG" "${arm64[0]}" "${armv7[0]}"
+            gh release upload --clobber -- "$TAG" "${assets[@]}"
             gh release edit --draft=false -- "$TAG"
           else
-            # Reruns preserve APKs users may already have downloaded.
-            for apk in "${arm64[0]}" "${armv7[0]}"; do
-              if ! jq -e --arg name "${apk##*/}" 'any(.assets[]; .name == $name and .state == "uploaded" and .size > 0)' <<< "$metadata" >/dev/null; then
-                gh release upload --clobber -- "$TAG" "$apk"
+            # Reruns preserve assets users may already have downloaded.
+            for asset in "${assets[@]}"; do
+              if ! jq -e --arg name "${asset##*/}" 'any(.assets[]; .name == $name and .state == "uploaded" and .size > 0)' <<< "$metadata" >/dev/null; then
+                gh release upload --clobber -- "$TAG" "$asset"
               fi
             done
           fi
