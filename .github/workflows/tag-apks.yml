@@ -175,6 +175,12 @@ jobs:
           done
           codesign --verify --strict --deep "$app"
           ditto -c -k --sequesterRsrc --keepParent "$app" macos-arm64.zip
+      - name: Verify recovery after abrupt desktop exits
+        if: hashFiles('tool/crash_smoke.py') != ''
+        run: python tool/crash_smoke.py
+      - name: Verify Windows encrypted state commits
+        if: runner.os == 'Windows' && hashFiles('test/windows_state_file_test.dart') != ''
+        run: flutter test --no-pub test/windows_state_file_test.dart
       - uses: actions/upload-artifact@v6
         with:
           name: fcxray-${{ matrix.target }}

@@ -11,6 +11,8 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+from contextlib import contextmanager
 import urllib.request
 import zipfile
 
@@ -52,8 +54,27 @@ def source():
     return dest
 
 
+@contextmanager
+def core_overlay(goos, upstream):
+    if goos != 'windows':
+        yield []
+        return
+    # Build against the pinned source, without modifying the user's checkout.
+    relative = Path('proxy/tun/tun_windows.go')
+    with tempfile.TemporaryDirectory(prefix='fcxray-tun-') as temporary:
+        work = Path(temporary)
+        patched = work / relative
+        patched.parent.mkdir(parents=True)
+        patched.write_bytes((upstream / relative).read_bytes().replace(b'\r\n', b'\n'))
+        run(['git', '-c', 'core.autocrlf=false', 'apply', '--no-index', ROOT / 'tool/patches/windows-session-tun.patch'], cwd=work)
+        overlay = work / 'overlay.json'
+        paths = {str(path / relative): str(patched) for path in (upstream, upstream.resolve())}
+        overlay.write_text(json.dumps({'Replace': paths}), encoding='utf-8')
+        yield ['-overlay=' + str(overlay)]
+
+
 def core(goos=None, arch=None):
-    source()
+    upstream = source()
     env = os.environ.copy()
     env['GOOS'] = goos or {'Darwin': 'darwin', 'Windows': 'windows', 'Linux': 'linux'}[platform.system()]
     env['GOARCH'] = arch or ('arm64' if platform.machine().lower() in ('arm64', 'aarch64') else 'amd64')
@@ -61,7 +82,8 @@ def core(goos=None, arch=None):
     name = 'fcxray-core' + ('.exe' if env['GOOS'] == 'windows' else '')
     dest = NATIVE / 'bin' / name
     dest.parent.mkdir(exist_ok=True)
-    run(['go', 'build', '-trimpath', '-ldflags=-s -w', '-o', dest, './cmd/fcxray-core'], cwd=NATIVE, env=env)
+    with core_overlay(env['GOOS'], upstream) as overlay:
+        run(['go', 'build', *overlay, '-trimpath', '-ldflags=-s -w', '-o', dest, './cmd/fcxray-core'], cwd=NATIVE, env=env)
 
 
 def android(target, output=None):
@@ -167,9 +189,10 @@ def main():
     elif args.target == 'core': core(args.goos, args.arch)
     elif args.target == 'android-core': android(args.android_target)
     elif args.target == 'check':
-        source()
         core()
-        run(['flutter', 'analyze']); run(['flutter', 'test']); run(['go', 'test', '-race', './...'], cwd=NATIVE)
+        run(['flutter', 'analyze']); run(['flutter', 'test'])
+        with core_overlay(platform.system().lower(), source()) as overlay:
+            run(['go', 'test', *overlay, '-race', './...'], cwd=NATIVE)
     elif args.target == 'tag-apk':
         if not args.abi or not args.tag:
             parser.error('tag-apk requires --abi and --tag')

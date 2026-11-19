@@ -1,4 +1,4 @@
-// Package bridge embeds the unmodified Xray core. Its API is gomobile compatible.
+// Package bridge embeds the pinned Xray core. Its API is gomobile compatible.
 package bridge
 
 import (

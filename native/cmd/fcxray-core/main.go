@@ -43,18 +43,70 @@ func main() {
 		fmt.Fprintln(os.Stderr, "usage: fcxray-core [--version | --socket path]")
 		os.Exit(2)
 	}
-	// EOF is the cross-platform shutdown mechanism, including on Windows.
-	// Parent death closes its pipe, releasing interfaces and routes via Stop.
+	supervise(input, output)
+}
+
+func supervise(input io.Reader, output io.Writer) {
+	// A broken reply pipe must allow the normal TUN cleanup path to run.
+	signal.Ignore(syscall.SIGPIPE)
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, os.Interrupt, syscall.SIGTERM)
-	go func() { <-signals; _ = bridge.Stop(); os.Exit(0) }()
-	defer bridge.Stop()
-	scanner := bufio.NewScanner(input)
-	scanner.Buffer(make([]byte, 64*1024), 2*1024*1024)
+	defer signal.Stop(signals)
+
+	requests := make(chan string)
+	disconnected := make(chan struct{})
+	go func() {
+		defer close(disconnected)
+		defer close(requests)
+		scanner := bufio.NewScanner(input)
+		scanner.Buffer(make([]byte, 64*1024), 2*1024*1024)
+		for scanner.Scan() {
+			requests <- scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+	}()
+
+	finished := make(chan struct{})
+	go func(finished chan struct{}) {
+		defer close(finished)
+		defer bridge.Stop()
+		handleRequests(requests, output)
+	}(finished)
+	select {
+	case <-finished:
+		return
+	case <-disconnected:
+		// Detect parent death even if the one outstanding IPC request is
+		// blocked inside Xray. Give it a short window to finish and clean up.
+	case <-signals:
+		finished = stopSession()
+	case err := <-uplinkConflict:
+		fmt.Fprintln(os.Stderr, err)
+		finished = stopSession()
+	}
+	select {
+	case <-finished:
+	case <-time.After(6 * time.Second):
+		// Returning from main releases process-owned device and WFP handles.
+	}
+}
+
+func stopSession() chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		_ = bridge.Stop()
+	}()
+	return done
+}
+
+func handleRequests(requests <-chan string, output io.Writer) {
 	encoder := json.NewEncoder(output)
-	for scanner.Scan() {
+	for line := range requests {
 		var req request
-		if err := json.Unmarshal(scanner.Bytes(), &req); err != nil {
+		if err := json.Unmarshal([]byte(line), &req); err != nil {
 			_ = encoder.Encode(map[string]any{"id": 0, "error": "invalid request"})
 			continue
 		}
@@ -103,8 +155,5 @@ func main() {
 		if encoder.Encode(response) != nil {
 			return
 		}
-	}
-	if err := scanner.Err(); err != nil {
-		fmt.Fprintln(os.Stderr, err)
 	}
 }

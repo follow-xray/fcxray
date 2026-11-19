@@ -22,6 +22,28 @@ class MainActivity : FlutterActivity() {
 
     override fun configureFlutterEngine(engine: FlutterEngine) {
         super.configureFlutterEngine(engine)
+        val messenger = engine.dartExecutor.binaryMessenger
+        MethodChannel(messenger, "com.fcxray.client/preferences",
+            io.flutter.plugin.common.StandardMethodCodec.INSTANCE, messenger.makeBackgroundTaskQueue())
+            .setMethodCallHandler { call, result ->
+                if (call.method != "flush") {
+                    result.notImplemented()
+                } else {
+                    // flutter_secure_storage 11 uses apply() for these default
+                    // stores. A commit on the same preferences waits for pending
+                    // writes, including first-use key material, off the UI thread.
+                    val stores = listOf("FlutterSecureKeyStorage",
+                        "FlutterSecureStorageConfiguration:FlutterSecureStorage", "FlutterSecureStorage")
+                    try {
+                        val saved = stores.all {
+                            applicationContext.getSharedPreferences(it, MODE_PRIVATE).edit().commit()
+                        }
+                        if (saved) result.success(null) else result.error("STORAGE", "Unable to flush saved settings", null)
+                    } catch (e: RuntimeException) {
+                        result.error("STORAGE", "Unable to flush saved settings", null)
+                    }
+                }
+            }
         MethodChannel(engine.dartExecutor.binaryMessenger, "com.fcxray.client/documents")
             .setMethodCallHandler { call, result ->
                 if (call.method != "saveRules") {

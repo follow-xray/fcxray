@@ -24,13 +24,15 @@ def free_port():
 
 
 class Helper:
-    def __init__(self, unix=False):
+    def __init__(self, unix=False, socket_dir=None):
         self.directory = None
         listener = None
         args = [str(CORE)]
         if unix:
-            self.directory = tempfile.TemporaryDirectory(prefix='xray-smoke-', dir='/tmp')
-            path = str(Path(self.directory.name) / 'core.sock')
+            if socket_dir is None:
+                self.directory = tempfile.TemporaryDirectory(prefix='xray-smoke-', dir='/tmp')
+                socket_dir = self.directory.name
+            path = str(Path(socket_dir) / 'core.sock')
             listener = socket.socket(socket.AF_UNIX)
             listener.bind(path); listener.listen(1); listener.settimeout(10)
             args += ['--socket', path]

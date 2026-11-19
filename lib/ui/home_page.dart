@@ -627,7 +627,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 Padding(
                   padding: EdgeInsets.only(top: 12),
                   child: Text(
-                    'macOS：Xray TUN 不修改系统 DNS。使用 TUN 时请将当前网络的 DNS 手动设为 1.1.1.1，断开后恢复。局域网 DNS 可能走更具体的系统路由。',
+                    'macOS 保留原有系统 DNS。局域网 DNS 可能经本地路由直连。',
                     style: TextStyle(
                       color: Calm.of(context).clay,
                       fontSize: 13,

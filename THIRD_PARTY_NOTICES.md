@@ -2,7 +2,7 @@
 
 fcxray's original source is licensed under Mozilla Public License 2.0; see LICENSE.
 
-- **Xray-core** — XTLS contributors, MPL-2.0. Source: https://github.com/XTLS/Xray-core . Exact revision is in core.lock.json. The core is built from unmodified source; recipients can obtain corresponding source at that revision. The MPL text is included in LICENSE and the app's license assets.
+- **Xray-core** — XTLS contributors, MPL-2.0. Source: https://github.com/XTLS/Xray-core . Exact revision is in core.lock.json. Windows builds apply tool/patches/windows-session-tun.patch to that revision via Go overlay. The upstream revision and the patch in the matching https://github.com/follow-xray/fcxray release source provide the corresponding source. The MPL text is included in LICENSE and the app's license assets.
 - **Flutter / Dart** — their respective contributors, BSD-style licenses. https://github.com/flutter/flutter and https://github.com/dart-lang/sdk . Flutter packages and their licenses are available through the app's license page.
 - **flutter_secure_storage** — its contributors, BSD-3-Clause. https://github.com/juliansteenbakker/flutter_secure_storage . Versions of it and transitive Flutter packages are locked in pubspec.lock.
 - **file_selector / path_provider** — Flutter contributors, BSD-style licenses. https://github.com/flutter/packages . Used for local database selection and application support directories; package licenses appear in the in-app license page.

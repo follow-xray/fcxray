@@ -1,0 +1,150 @@
+--- a/proxy/tun/tun_windows.go
++++ b/proxy/tun/tun_windows.go
+@@ -5,7 +5,6 @@
+ import (
+ 	"bytes"
+ 	"context"
+-	"crypto/md5"
+ 	"encoding/binary"
+ 	go_errors "errors"
+ 	"net"
+@@ -44,7 +43,6 @@
+ 	luid     winipcfg.LUID
+ 	cbr      winipcfg.ChangeCallback
+ 	cbi      winipcfg.ChangeCallback
+-	guard    outboundGuard
+ 	wfp      windows.Handle
+ 	resolver *savedResolver
+ 	skipStop chan struct{}
+@@ -55,8 +53,7 @@
+ // WindowsTun implements Tun
+ var _ Tun = (*WindowsTun)(nil)
+ 
+-// NewTun creates a Wintun interface with the given name. Should a Wintun
+-// interface with the same name exist, it tried to be reused.
++// NewTun creates a session-owned Wintun adapter.
+ func NewTun(options *Config) (Tun, error) {
+ 	// instantiate wintun adapter
+ 	adapter, err := open(options.Name, options.Desc)
+@@ -83,20 +80,39 @@
+ }
+ 
+ func open(name, desc string) (*wintun.Adapter, error) {
+-	// generate a deterministic GUID from the adapter name
+-	id := md5.Sum([]byte(name))
+-	guid := (*windows.GUID)(unsafe.Pointer(&id[0]))
+-	// try to open existing adapter by name
+-	adapter, err := wintun.OpenAdapter(name)
+-	if err == nil {
+-		return adapter, nil
+-	}
+-	// try to create adapter anew
+-	adapter, err = wintun.CreateAdapter(name, desc, guid)
+-	if err == nil {
+-		return adapter, nil
+-	}
+-	return nil, err
++	// Never adopt another process's adapter or its saved interface settings.
++	id, err := windows.GenerateGUID()
++	if err != nil {
++		return nil, err
++	}
++	return wintun.CreateAdapter(name+"-"+id.String(), desc, &id)
++}
++
++// FcxrayUplinkConflict tells the desktop supervisor to release the session.
++var FcxrayUplinkConflict = make(chan error, 1)
++
++func checkFcxrayUplink(route4, route6 bool) error {
++	if updater == nil {
++		return nil
++	}
++	iface := updater.Get()
++	if iface == nil {
++		return errors.New("no usable outbound interface")
++	}
++	luid, err := winipcfg.LUIDFromIndex(uint32(iface.Index))
++	if err != nil {
++		return err
++	}
++	for _, family := range []winipcfg.AddressFamily{windows.AF_INET, windows.AF_INET6} {
++		if (family == windows.AF_INET && !route4) || (family == windows.AF_INET6 && !route6) {
++			continue
++		}
++		row, err := luid.IPInterface(family)
++		if err == nil && (row.WeakHostSend || row.ForwardingEnabled) {
++			return errors.New("TUN requires strong host send without forwarding on ", iface.Name, "; physical network settings were preserved")
++		}
++	}
++	return nil
+ }
+ 
+ // ipv6Off tells whether DisabledComponents turns IPv6 off on the non-tunnel
+@@ -146,6 +162,9 @@
+ 			route.NextHop = netip.IPv6Unspecified()
+ 		}
+ 		routesMap[route] = struct{}{}
++	}
++	if err := checkFcxrayUplink(route4, route6); err != nil {
++		return err
+ 	}
+ 	routesData := make([]*winipcfg.RouteData, 0, len(routesMap))
+ 	for route := range routesMap {
+@@ -333,34 +352,35 @@
+ 	}
+ 
+ 	if updater != nil {
+-		// Xray's own connections have to stay out of the IP versions routed
+-		// to the TUN, which needs Windows to honor the binding to updater's
+-		// interface.
+-		if route4 {
+-			t.guard.families = append(t.guard.families, windows.AF_INET)
+-		}
+-		if route6 {
+-			t.guard.families = append(t.guard.families, windows.AF_INET6)
+-		}
+-		t.guard.check()
++		// A new uplink can have different settings. Fail open instead of
++		// changing a physical interface and relying on Close to undo it.
++		changed := func() {
++			updater.Update()
++			if err := checkFcxrayUplink(route4, route6); err != nil {
++				select {
++				case FcxrayUplinkConflict <- err:
++				default:
++				}
++			}
++		}
+ 		// Only a registered callback goes into the fields: a nil pointer in
+ 		// them would not compare equal to nil in Close.
+ 		cbr, err := winipcfg.RegisterRouteChangeCallback(func(notificationType winipcfg.MibNotificationType, route *winipcfg.MibIPforwardRow2) {
+-			updater.Update()
+-			t.guard.check()
++			changed()
+ 		})
+ 		if err != nil {
+ 			return err
+ 		}
+ 		t.cbr = cbr
+ 		cbi, err := winipcfg.RegisterInterfaceChangeCallback(func(notificationType winipcfg.MibNotificationType, iface *winipcfg.MibIPInterfaceRow) {
+-			updater.Update()
+-			t.guard.check()
++			changed()
+ 		})
+ 		if err != nil {
+ 			return err
+ 		}
+ 		t.cbi = cbi
++		updater.Update()
++		return checkFcxrayUplink(route4, route6)
+ 	}
+ 	return nil
+ }
+@@ -379,7 +399,6 @@
+ 	if t.cbi != nil {
+ 		t.cbi.Unregister()
+ 	}
+-	t.guard.restore()
+ 	if t.luid != 0 {
+ 		t.luid.FlushRoutes(windows.AF_INET)
+ 		t.luid.FlushIPAddresses(windows.AF_INET)
