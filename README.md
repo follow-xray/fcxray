@@ -92,7 +92,7 @@ Android 内核构建使用固定版本的官方 `golang.org/x/mobile`；当前�
 
 ## GitHub Release 自动发布
 
-推送新 tag 后，**Release builds** 工作流并行构建以下四个附件。以 `v0.1.0` 为例：
+自动构建仅由推送 tag 触发。**Release builds** 对标签源码运行检查和测试，并并行构建以下四个附件。以 `v0.1.0` 为例：
 
 | 附件 | 适用平台 |
 | --- | --- |
