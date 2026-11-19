@@ -32,6 +32,7 @@ class RecordingFetcher extends ResourceFetcher {
   @override
   Future<String> subscription(
     String url, {
+    String userAgent = SubscriptionAgent.xrayHeader,
     Uri? proxy,
     void Function(DownloadRoute)? onRoute,
   }) async {
@@ -176,6 +177,71 @@ void main() {
       await reloaded.initialize(poll: false);
       expect(reloaded.subscriptions, hasLength(1));
       expect(reloaded.profiles, hasLength(2));
+    },
+  );
+
+  test(
+    'subscription UA is persisted, used through redirects, and scoped to subscriptions',
+    () async {
+      final store = MemoryStore()..value = {};
+      const fetch = ResourceFetcher(allowLoopbackHttp: true);
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      final received = <String?>[];
+      server.listen((r) async {
+        received.add(r.headers.value(HttpHeaders.userAgentHeader));
+        if (r.uri.path == '/sub') {
+          r.response.statusCode = 302;
+          r.response.headers.set('location', '/payload');
+        } else {
+          r.response.write(node('test.example', 'Test'));
+        }
+        await r.response.close();
+      });
+      final url = 'http://127.0.0.1:${server.port}';
+      final c = AppController(
+        backend: FakeBackend(),
+        store: store,
+        platform: 'windows',
+        fetcher: fetch,
+      );
+      addTearDown(c.dispose);
+      await c.initialize(poll: false);
+      final id = (await c.addSubscriptions('test', '$url/sub', 0)).single;
+      for (final agent in SubscriptionAgent.values) {
+        if (agent != SubscriptionAgent.xray) {
+          await c.setSubscriptionAgent(agent, 'My Client/2');
+        }
+        expect(await c.updateSubscription(id), true);
+      }
+      expect(received, [
+        'v2rayN/7.25.6',
+        'v2rayN/7.25.6',
+        'FlClash/v0.8.96 clash-verge Platform/windows',
+        'FlClash/v0.8.96 clash-verge Platform/windows',
+        'My Client/2',
+        'My Client/2',
+      ]);
+      await fetch.download('$url/geo', limit: 1024).drain<void>();
+      expect(received.last, 'fcxray/0.7.1');
+      final restored = AppController(
+        backend: FakeBackend(),
+        store: store,
+        platform: 'windows',
+      );
+      addTearDown(restored.dispose);
+      await restored.initialize(poll: false);
+      expect(restored.subscriptionHeader, 'My Client/2');
+      await expectLater(
+        restored.setSubscriptionAgent(SubscriptionAgent.custom, 'a\r\nb'),
+        throwsFormatException,
+      );
+      await expectLater(
+        restored.setSubscriptionAgent(SubscriptionAgent.custom, '  '),
+        throwsFormatException,
+      );
+      await restored.setSubscriptionAgent(SubscriptionAgent.xray, '');
+      expect(restored.customSubscriptionAgent, 'My Client/2');
     },
   );
 

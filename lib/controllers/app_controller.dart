@@ -118,7 +118,43 @@ class AppController extends ChangeNotifier {
     }, allowConnected: true);
   }
 
+  SubscriptionAgent subscriptionAgent = SubscriptionAgent.xray;
+  String customSubscriptionAgent = '';
+  String get subscriptionHeader =>
+      subscriptionAgent.header(platform, customSubscriptionAgent);
+
+  Future<void> setSubscriptionAgent(
+    SubscriptionAgent mode,
+    String custom,
+  ) async {
+    if (mode == SubscriptionAgent.custom &&
+        !SubscriptionAgent.validCustom(custom)) {
+      throw const FormatException('请输入非空的单行 ASCII User-Agent');
+    }
+    await _change(() async {
+      subscriptionAgent = mode;
+      if (mode == SubscriptionAgent.custom) {
+        customSubscriptionAgent = custom.trim();
+      }
+    }, allowConnected: true);
+  }
+
   void _restore(Map<String, dynamic> value) {
+    final custom = value['customSubscriptionAgent'];
+    customSubscriptionAgent =
+        custom is String && SubscriptionAgent.validCustom(custom)
+        ? custom.trim()
+        : '';
+    subscriptionAgent =
+        SubscriptionAgent.values
+            .where(
+              (agent) =>
+                  agent.name == value['subscriptionAgent'] &&
+                  (agent != SubscriptionAgent.custom ||
+                      customSubscriptionAgent.isNotEmpty),
+            )
+            .firstOrNull ??
+        SubscriptionAgent.xray;
     _themeMode.value =
         ThemeMode.values
             .where((mode) => mode.name == value['themeMode'])
@@ -160,6 +196,8 @@ class AppController extends ChangeNotifier {
   Map<String, dynamic> _state() => {
     'schemaVersion': 3,
     'themeMode': _themeMode.value.name,
+    'subscriptionAgent': subscriptionAgent.name,
+    'customSubscriptionAgent': customSubscriptionAgent,
     'bypassLan': bypassLan,
     'useGeo': useGeo,
     'routeOverrides': overrides.map((r) => r.toJson()).toList(),
@@ -372,6 +410,7 @@ class AppController extends ChangeNotifier {
       final parsed = ProfileImporter.parse(
         await fetcher.subscription(
           subscription.url,
+          userAgent: subscriptionHeader,
           proxy: connected ? _activeHttpProxy : null,
           onRoute: _downloadRoute,
         ),

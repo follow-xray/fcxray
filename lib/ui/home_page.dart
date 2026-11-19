@@ -10,6 +10,7 @@ import 'help_fields.dart';
 import 'nodes_panel.dart';
 import 'routing_preferences.dart';
 import 'subscriptions_panel.dart';
+import 'subscription_agent_setting.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key, required this.controller});
@@ -537,6 +538,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ],
         ),
       ),
+      const SizedBox(height: 18),
+      SubscriptionAgentSetting(c),
       const SizedBox(height: 18),
       if (c.error != null) _errorCard(),
       if (!c.editable)

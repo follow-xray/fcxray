@@ -25,6 +25,35 @@ void main() {
     expect(find.text('Example parameter help'), findsOneWidget);
     await mouse.removePointer();
   });
+  testWidgets('subscription agent dialog validates and saves a custom header', (
+    t,
+  ) async {
+    final c = AppController(
+      backend: FakeBackend(),
+      store: MemoryStore(),
+      platform: 'android',
+    );
+    await c.initialize(poll: false);
+    await t.pumpWidget(FcxrayApp(controller: c));
+    await t.tap(find.text('设置'));
+    await t.pumpAndSettle();
+    await t.ensureVisible(find.text('订阅 User-Agent'));
+    await t.tap(find.text('订阅 User-Agent'));
+    await t.pumpAndSettle();
+    await t.tap(find.text('Xray（v2rayN）').last);
+    await t.pumpAndSettle();
+    await t.tap(find.text('自定义').last);
+    await t.pumpAndSettle();
+    await t.tap(find.text('保存'));
+    await t.pumpAndSettle();
+    expect(find.text('请输入非空的单行 ASCII User-Agent'), findsOneWidget);
+    await t.enterText(find.byType(TextFormField), 'Demo/3');
+    await t.tap(find.text('保存'));
+    await t.pumpAndSettle();
+    expect(c.subscriptionHeader, 'Demo/3');
+    expect(find.text('自定义 · Demo/3'), findsOneWidget);
+  });
+
   for (final width in [390.0, 1280.0]) {
     testWidgets(
       'manual form, subscriptions, rules, and config are reachable at width $width',

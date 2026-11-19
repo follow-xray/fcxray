@@ -1,5 +1,23 @@
 import 'profile.dart';
 
+enum SubscriptionAgent {
+  xray('Xray（v2rayN）'),
+  clash('Clash（FlClash）'),
+  custom('自定义');
+
+  const SubscriptionAgent(this.label);
+  final String label;
+  static const xrayHeader = 'v2rayN/7.25.6';
+  String header(String platform, String customValue) => switch (this) {
+    xray => xrayHeader,
+    clash => 'FlClash/v0.8.96 clash-verge Platform/$platform',
+    custom => customValue,
+  };
+
+  static bool validCustom(String value) =>
+      value.trim().isNotEmpty && !RegExp(r'[^ -~]').hasMatch(value);
+}
+
 class Subscription {
   const Subscription({
     required this.id,

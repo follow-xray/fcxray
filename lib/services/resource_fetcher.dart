@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import '../models/resources.dart';
 
 enum DownloadRoute { proxy, system }
 
@@ -8,6 +9,7 @@ enum DownloadRoute { proxy, system }
 class ResourceFetcher {
   const ResourceFetcher({this.allowLoopbackHttp = false});
   final bool allowLoopbackHttp;
+  static const _resourceAgent = 'fcxray/0.7.1';
   Uri validateUrl(String value) {
     final uri = Uri.tryParse(value.trim());
     final local =
@@ -27,6 +29,7 @@ class ResourceFetcher {
   Stream<List<int>> download(
     String source, {
     required int limit,
+    String userAgent = _resourceAgent,
     Uri? proxy,
   }) async* {
     var uri = validateUrl(source);
@@ -47,7 +50,7 @@ class ResourceFetcher {
             .getUrl(uri)
             .timeout(const Duration(seconds: 20));
         request.followRedirects = false;
-        request.headers.set(HttpHeaders.userAgentHeader, 'fcxray/0.7.1');
+        request.headers.set(HttpHeaders.userAgentHeader, userAgent);
         final response = await request.close().timeout(
           const Duration(seconds: 20),
         );
@@ -100,6 +103,7 @@ class ResourceFetcher {
   Future<T> fetch<T>(
     String source, {
     required int limit,
+    String userAgent = _resourceAgent,
     Uri? proxy,
     void Function(DownloadRoute)? onRoute,
     required Future<T> Function(Stream<List<int>>) consume,
@@ -107,22 +111,26 @@ class ResourceFetcher {
     if (proxy != null) {
       onRoute?.call(DownloadRoute.proxy);
       try {
-        return await consume(download(source, limit: limit, proxy: proxy));
+        return await consume(
+          download(source, limit: limit, proxy: proxy, userAgent: userAgent),
+        );
       } on Object {
         /* Retry the complete download over the system network. */
       }
     }
     onRoute?.call(DownloadRoute.system);
-    return consume(download(source, limit: limit));
+    return consume(download(source, limit: limit, userAgent: userAgent));
   }
 
   Future<String> subscription(
     String url, {
+    String userAgent = SubscriptionAgent.xrayHeader,
     Uri? proxy,
     void Function(DownloadRoute)? onRoute,
   }) => fetch(
     url,
     limit: 1024 * 1024,
+    userAgent: userAgent,
     proxy: proxy,
     onRoute: onRoute,
     consume: (bytes) async => utf8.decode(

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:fcxray/models/resources.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:fcxray/controllers/app_controller.dart';
 import 'package:fcxray/services/core_backend.dart';
@@ -17,6 +18,7 @@ class MutableFetcher extends ResourceFetcher {
   @override
   Future<String> subscription(
     String url, {
+    String userAgent = SubscriptionAgent.xrayHeader,
     Uri? proxy,
     void Function(DownloadRoute)? onRoute,
   }) async {
@@ -149,12 +151,15 @@ void main() {
       addTearDown(() => direct.close(force: true));
       addTearDown(() => proxy.close(force: true));
       var directHits = 0, proxyHits = 0, broken = false;
+      final headers = <String?>[];
       direct.listen((r) async {
+        headers.add(r.headers.value(HttpHeaders.userAgentHeader));
         directHits++;
         r.response.write('complete-direct');
         await r.response.close();
       });
       proxy.listen((r) async {
+        headers.add(r.headers.value(HttpHeaders.userAgentHeader));
         proxyHits++;
         if (!broken) {
           r.response.write('complete-proxy');
@@ -175,7 +180,11 @@ void main() {
       expect(proxyHits, 1);
       expect(directHits, 0);
       broken = true;
-      expect(await fetch.subscription(url, proxy: route), 'complete-direct');
+      expect(
+        await fetch.subscription(url, proxy: route, userAgent: 'Custom/2'),
+        'complete-direct',
+      );
+      expect(headers, [SubscriptionAgent.xrayHeader, 'Custom/2', 'Custom/2']);
       expect(proxyHits, 2);
       expect(directHits, 1);
     },
